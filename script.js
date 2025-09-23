@@ -1,4 +1,5 @@
-// Sistema de Controle de Estoque - JavaScript
+// Sistema de Controle de Estoque - JavaScript (com backend)
+const API_URL = 'http://localhost:3000/products'; // ajuste para sua API real
 
 class InventorySystem {
     constructor() {
@@ -6,68 +7,33 @@ class InventorySystem {
         this.currentEditingId = null;
         this.filteredProducts = [];
         this.productToDelete = null;
-        
+
         this.init();
     }
 
-    init() {
-        this.loadFromStorage();
+    async init() {
+        await this.loadFromBackend();
         this.bindEvents();
         this.renderProducts();
         this.updateStats();
     }
 
-    // Gerenciamento de dados
-    loadFromStorage() {
-        const stored = localStorage.getItem('inventory_products');
-        if (stored) {
-            try {
-                this.products = JSON.parse(stored);
-                this.filteredProducts = [...this.products];
-            } catch (error) {
-                console.error('Erro ao carregar dados do localStorage:', error);
-                this.products = [];
-                this.filteredProducts = [];
-            }
-        }
-    }
-
-    saveToStorage() {
+    // ===================== Backend =====================
+    async loadFromBackend() {
         try {
-            localStorage.setItem('inventory_products', JSON.stringify(this.products));
+            const res = await fetch(API_URL);
+            this.products = await res.json();
+            this.filteredProducts = [...this.products];
         } catch (error) {
-            console.error('Erro ao salvar no localStorage:', error);
-            alert('Erro ao salvar os dados. Verifique o espaço disponível no navegador.');
+            console.error('Erro ao carregar produtos da API:', error);
+            this.products = [];
+            this.filteredProducts = [];
         }
     }
 
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-
-    validateProduct(productData) {
-        const errors = [];
-
-        if (!productData.name || productData.name.trim().length === 0) errors.push('Nome do item é obrigatório');
-        if (!productData.code || productData.code.trim().length === 0) errors.push('Código/ID é obrigatório');
-        if (productData.quantity === '' || productData.quantity < 0) errors.push('Quantidade deve ser um número maior ou igual a zero');
-        if (!productData.location || productData.location.trim().length === 0) errors.push('Local é obrigatório');
-
-        const existingProduct = this.products.find(p => 
-            p.code.toLowerCase() === productData.code.toLowerCase() && 
-            p.id !== this.currentEditingId
-        );
-        if (existingProduct) errors.push('Já existe um produto com este código');
-
-        return errors;
-    }
-
-    addProduct(productData) {
+    async addProduct(productData) {
         const errors = this.validateProduct(productData);
-        if (errors.length > 0) {
-            alert('Erros encontrados:\n' + errors.join('\n'));
-            return false;
-        }
+        if (errors.length > 0) { alert('Erros:\n' + errors.join('\n')); return false; }
 
         const product = {
             id: this.generateId(),
@@ -75,62 +41,100 @@ class InventorySystem {
             code: productData.code.trim().toUpperCase(),
             quantity: parseInt(productData.quantity),
             location: productData.location.trim(),
-            description: productData.description ? productData.description.trim() : '',
+            description: productData.description?.trim() || '',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 
-        this.products.push(product);
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(product)
+            });
+
+            this.products.push(product);
+            this.applyCurrentFilter();
+            this.renderProducts();
+            this.updateStats();
+            return true;
+        } catch (error) {
+            console.error('Erro ao adicionar produto:', error);
+            alert('Erro ao adicionar produto no servidor.');
+            return false;
+        }
     }
 
-    updateProduct(productData) {
+    async updateProduct(productData) {
         const errors = this.validateProduct(productData);
-        if (errors.length > 0) {
-            alert('Erros encontrados:\n' + errors.join('\n'));
-            return false;
-        }
+        if (errors.length > 0) { alert('Erros:\n' + errors.join('\n')); return false; }
 
         const productIndex = this.products.findIndex(p => p.id === this.currentEditingId);
-        if (productIndex === -1) {
-            alert('Produto não encontrado');
-            return false;
-        }
+        if (productIndex === -1) { alert('Produto não encontrado'); return false; }
 
-        this.products[productIndex] = {
+        const updatedProduct = {
             ...this.products[productIndex],
             name: productData.name.trim(),
             code: productData.code.trim().toUpperCase(),
             quantity: parseInt(productData.quantity),
             location: productData.location.trim(),
-            description: productData.description ? productData.description.trim() : '',
+            description: productData.description?.trim() || '',
             updatedAt: new Date().toISOString()
         };
 
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
-    }
+        try {
+            await fetch(`${API_URL}/${this.currentEditingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedProduct)
+            });
 
-    deleteProduct(productId) {
-        const productIndex = this.products.findIndex(p => p.id === productId);
-        if (productIndex === -1) {
-            alert('Produto não encontrado');
+            this.products[productIndex] = updatedProduct;
+            this.applyCurrentFilter();
+            this.renderProducts();
+            this.updateStats();
+            return true;
+        } catch (error) {
+            console.error('Erro ao atualizar produto:', error);
+            alert('Erro ao atualizar produto no servidor.');
             return false;
         }
+    }
 
-        this.products.splice(productIndex, 1);
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
+    async deleteProduct(productId) {
+        try {
+            await fetch(`${API_URL}/${productId}`, { method: 'DELETE' });
+            this.products = this.products.filter(p => p.id !== productId);
+            this.applyCurrentFilter();
+            this.renderProducts();
+            this.updateStats();
+            return true;
+        } catch (error) {
+            console.error('Erro ao deletar produto:', error);
+            alert('Erro ao deletar produto no servidor.');
+            return false;
+        }
+    }
+
+    // ===================== Lógica existente =====================
+    generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
+    validateProduct(productData) {
+        const errors = [];
+        if (!productData.name || productData.name.trim() === '') errors.push('Nome do item é obrigatório');
+        if (!productData.code || productData.code.trim() === '') errors.push('Código/ID é obrigatório');
+        if (productData.quantity === '' || productData.quantity < 0) errors.push('Quantidade deve ser >= 0');
+        if (!productData.location || productData.location.trim() === '') errors.push('Local é obrigatório');
+
+        const existingProduct = this.products.find(p =>
+            p.code.toLowerCase() === productData.code.toLowerCase() &&
+            p.id !== this.currentEditingId
+        );
+        if (existingProduct) errors.push('Já existe um produto com este código');
+
+        return errors;
     }
 
     getProduct(productId) {
@@ -138,15 +142,14 @@ class InventorySystem {
     }
 
     searchProducts(query) {
-        if (!query || query.trim().length === 0) {
-            this.filteredProducts = [...this.products];
-        } else {
-            const searchTerm = query.toLowerCase().trim();
-            this.filteredProducts = this.products.filter(product => 
-                product.name.toLowerCase().includes(searchTerm) ||
-                product.code.toLowerCase().includes(searchTerm) ||
-                product.location.toLowerCase().includes(searchTerm) ||
-                (product.description && product.description.toLowerCase().includes(searchTerm))
+        if (!query || query.trim() === '') this.filteredProducts = [...this.products];
+        else {
+            const term = query.toLowerCase().trim();
+            this.filteredProducts = this.products.filter(p =>
+                p.name.toLowerCase().includes(term) ||
+                p.code.toLowerCase().includes(term) ||
+                p.location.toLowerCase().includes(term) ||
+                (p.description && p.description.toLowerCase().includes(term))
             );
         }
         this.renderProducts();
@@ -154,11 +157,8 @@ class InventorySystem {
 
     applyCurrentFilter() {
         const searchInput = document.getElementById('searchInput');
-        if (searchInput && searchInput.value.trim().length > 0) {
-            this.searchProducts(searchInput.value);
-        } else {
-            this.filteredProducts = [...this.products];
-        }
+        if (searchInput && searchInput.value.trim() !== '') this.searchProducts(searchInput.value);
+        else this.filteredProducts = [...this.products];
     }
 
     renderProducts() {
@@ -173,43 +173,40 @@ class InventorySystem {
 
         productsList.style.display = 'block';
         emptyState.style.display = 'none';
-
-        productsList.innerHTML = this.filteredProducts.map(product => this.createProductHTML(product)).join('');
+        productsList.innerHTML = this.filteredProducts.map(p => this.createProductHTML(p)).join('');
     }
 
     createProductHTML(product) {
         const quantityClass = this.getQuantityClass(product.quantity);
         const formattedDate = new Date(product.updatedAt).toLocaleDateString('pt-BR');
-
         return `
-            <div class="product-item" data-id="${product.id}">
-                <div class="product-header">
-                    <div class="product-info">
-                        <h3>${this.escapeHtml(product.name)}</h3>
-                        <div class="product-code">Código: ${this.escapeHtml(product.code)}</div>
-                    </div>
-                    <div class="product-actions">
-                        <button type="button" class="btn-edit" onclick="inventorySystem.editProduct('${product.id}')">Editar</button>
-                        <button type="button" class="btn-delete" onclick="inventorySystem.confirmDelete('${product.id}')">Excluir</button>
-                    </div>
+        <div class="product-item" data-id="${product.id}">
+            <div class="product-header">
+                <div class="product-info">
+                    <h3>${this.escapeHtml(product.name)}</h3>
+                    <div class="product-code">Código: ${this.escapeHtml(product.code)}</div>
                 </div>
-                <div class="product-details">
-                    <div class="product-detail">
-                        <div class="product-detail-label">Quantidade</div>
-                        <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity}</span></div>
-                    </div>
-                    <div class="product-detail">
-                        <div class="product-detail-label">Local</div>
-                        <div class="product-detail-value">${this.escapeHtml(product.location)}</div>
-                    </div>
-                    ${product.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(product.description)}</div></div>` : ''}
-                    <div class="product-detail">
-                        <div class="product-detail-label">Última atualização</div>
-                        <div class="product-detail-value">${formattedDate}</div>
-                    </div>
+                <div class="product-actions">
+                    <button type="button" class="btn-edit" onclick="inventorySystem.editProduct('${product.id}')">Editar</button>
+                    <button type="button" class="btn-delete" onclick="inventorySystem.confirmDelete('${product.id}')">Excluir</button>
                 </div>
             </div>
-        `;
+            <div class="product-details">
+                <div class="product-detail">
+                    <div class="product-detail-label">Quantidade</div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity}</span></div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Local</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.location)}</div>
+                </div>
+                ${product.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(product.description)}</div></div>` : ''}
+                <div class="product-detail">
+                    <div class="product-detail-label">Última atualização</div>
+                    <div class="product-detail-value">${formattedDate}</div>
+                </div>
+            </div>
+        </div>`;
     }
 
     getQuantityClass(quantity) {
@@ -227,10 +224,11 @@ class InventorySystem {
     updateStats() {
         const totalItems = document.getElementById('totalItems');
         const total = this.products.length;
-        const totalQuantity = this.products.reduce((sum, product) => sum + product.quantity, 0);
+        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
         totalItems.textContent = `Total de itens: ${total} (${totalQuantity} unidades)`;
     }
 
+    // ===================== Modais =====================
     openModal(modalId) {
         const modal = document.getElementById(modalId);
         const overlay = document.getElementById('modalOverlay');
@@ -238,7 +236,6 @@ class InventorySystem {
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
 
-        // Foco automático somente ao abrir modal de produto
         if (modalId === 'productModal') {
             const nameInput = document.getElementById('productName');
             if (nameInput) nameInput.focus();
@@ -261,8 +258,7 @@ class InventorySystem {
     clearForm() {
         const form = document.getElementById('productForm');
         form.reset();
-        const modalTitle = document.getElementById('modalTitle');
-        modalTitle.textContent = 'Adicionar Produto';
+        document.getElementById('modalTitle').textContent = 'Adicionar Produto';
     }
 
     populateForm(product) {
@@ -306,68 +302,61 @@ class InventorySystem {
         this.openModal('confirmModal');
     }
 
-    executeDelete() {
+    async executeDelete() {
         if (this.productToDelete) {
-            this.deleteProduct(this.productToDelete);
+            await this.deleteProduct(this.productToDelete);
             this.productToDelete = null;
             this.closeModal('confirmModal');
         }
     }
 
-    saveProduct() {
+    async saveProduct() {
         const formData = this.getFormData();
         let success = false;
 
-        if (this.currentEditingId) {
-            success = this.updateProduct(formData);
-        } else {
-            success = this.addProduct(formData);
-        }
+        if (this.currentEditingId) success = await this.updateProduct(formData);
+        else success = await this.addProduct(formData);
 
         if (success) this.closeModal('productModal');
     }
 
     clearSearch() {
-        const searchInput = document.getElementById('searchInput');
-        searchInput.value = '';
+        document.getElementById('searchInput').value = '';
         this.searchProducts('');
     }
 
+    // ===================== Eventos =====================
     bindEvents() {
         document.getElementById('addItemBtn').addEventListener('click', () => this.addNewProduct());
-        document.getElementById('searchInput').addEventListener('input', (e) => this.searchProducts(e.target.value));
+        document.getElementById('searchInput').addEventListener('input', e => this.searchProducts(e.target.value));
         document.getElementById('clearSearch').addEventListener('click', () => this.clearSearch());
         document.getElementById('closeModal').addEventListener('click', () => this.closeModal('productModal'));
         document.getElementById('cancelBtn').addEventListener('click', () => this.closeModal('productModal'));
-        document.getElementById('productForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveProduct(); });
+        document.getElementById('productForm').addEventListener('submit', e => { e.preventDefault(); this.saveProduct(); });
         document.getElementById('cancelDelete').addEventListener('click', () => this.closeModal('confirmModal'));
         document.getElementById('confirmDelete').addEventListener('click', () => this.executeDelete());
 
-        // Overlay
         document.getElementById('modalOverlay').addEventListener('click', () => {
             const activeModal = document.querySelector('.modal.active');
             if (activeModal) this.closeModal(activeModal.id);
         });
 
-        // Tecla ESC
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 const activeModal = document.querySelector('.modal.active');
                 if (activeModal) this.closeModal(activeModal.id);
             }
         });
 
-        // Prevenir fechamento ao clicar dentro do modal
-        document.querySelectorAll('.modal-content').forEach(content => {
-            content.addEventListener('click', (e) => e.stopPropagation());
-        });
-
-        // REMOVIDO: transitionend que causava reset de foco
+        document.querySelectorAll('.modal-content').forEach(content => content.addEventListener('click', e => e.stopPropagation()));
     }
 }
 
-// Inicializar
-let inventorySystem;
+// ===================== Inicialização =====================
+const inventorySystem = new InventorySystem();
+
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
     inventorySystem = new InventorySystem();
