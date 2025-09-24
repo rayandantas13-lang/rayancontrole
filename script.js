@@ -6,363 +6,251 @@ class InventorySystem {
         this.currentEditingId = null;
         this.filteredProducts = [];
         this.productToDelete = null;
-        
+
         this.init();
     }
 
     init() {
-        this.loadFromStorage();
         this.bindEvents();
-        this.renderProducts();
-        this.updateStats();
+        this.loadFromFirestore();
     }
 
-    // Gerenciamento de dados
-    loadFromStorage() {
-        const stored = localStorage.getItem('inventory_products');
-        if (stored) {
-            try {
-                this.products = JSON.parse(stored);
-                this.filteredProducts = [...this.products];
-            } catch (error) {
-                console.error('Erro ao carregar dados do localStorage:', error);
-                this.products = [];
-                this.filteredProducts = [];
-            }
-        }
-    }
-
-    saveToStorage() {
+    // ===================== Firestore =====================
+    async loadFromFirestore() {
         try {
-            localStorage.setItem('inventory_products', JSON.stringify(this.products));
+            const colRef = collection(db, "products");
+            // Atualização em tempo real
+            onSnapshot(colRef, (snapshot) => {
+                this.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.applyCurrentFilter();
+                this.renderProducts();
+                this.updateStats();
+            });
         } catch (error) {
-            console.error('Erro ao salvar no localStorage:', error);
-            alert('Erro ao salvar os dados. Verifique o espaço disponível no navegador.');
+            console.error("Erro ao carregar produtos do Firestore:", error);
         }
     }
 
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-
-    validateProduct(productData) {
-        const errors = [];
-
-        if (!productData.name || productData.name.trim().length === 0) errors.push('Nome do item é obrigatório');
-        if (!productData.code || productData.code.trim().length === 0) errors.push('Código/ID é obrigatório');
-        if (productData.quantity === '' || productData.quantity < 0) errors.push('Quantidade deve ser um número maior ou igual a zero');
-        if (!productData.location || productData.location.trim().length === 0) errors.push('Local é obrigatório');
-
-        const existingProduct = this.products.find(p => 
-            p.code.toLowerCase() === productData.code.toLowerCase() && 
-            p.id !== this.currentEditingId
-        );
-        if (existingProduct) errors.push('Já existe um produto com este código');
-
-        return errors;
-    }
-
-    addProduct(productData) {
+    async addProduct(productData) {
         const errors = this.validateProduct(productData);
-        if (errors.length > 0) {
-            alert('Erros encontrados:\n' + errors.join('\n'));
-            return false;
-        }
+        if (errors.length > 0) { alert(errors.join("\n")); return false; }
 
         const product = {
-            id: this.generateId(),
             name: productData.name.trim(),
             code: productData.code.trim().toUpperCase(),
             quantity: parseInt(productData.quantity),
             location: productData.location.trim(),
-            description: productData.description ? productData.description.trim() : '',
+            description: productData.description?.trim() || '',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
 
-        this.products.push(product);
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
+        try {
+            await addDoc(collection(db, "products"), product);
+            return true;
+        } catch (error) {
+            console.error("Erro ao adicionar produto:", error);
+            alert("Erro ao salvar no servidor.");
+            return false;
+        }
     }
 
-    updateProduct(productData) {
+    async updateProduct(productData) {
         const errors = this.validateProduct(productData);
-        if (errors.length > 0) {
-            alert('Erros encontrados:\n' + errors.join('\n'));
+        if (errors.length > 0) { alert(errors.join("\n")); return false; }
+
+        try {
+            const ref = doc(db, "products", this.currentEditingId);
+            await updateDoc(ref, {
+                ...productData,
+                code: productData.code.trim().toUpperCase(),
+                quantity: parseInt(productData.quantity),
+                updatedAt: new Date().toISOString()
+            });
+            return true;
+        } catch (error) {
+            console.error("Erro ao atualizar produto:", error);
+            alert("Erro ao atualizar no servidor.");
             return false;
         }
+    }
 
-        const productIndex = this.products.findIndex(p => p.id === this.currentEditingId);
-        if (productIndex === -1) {
-            alert('Produto não encontrado');
+    async deleteProduct(productId) {
+        try {
+            const ref = doc(db, "products", productId);
+            await deleteDoc(ref);
+            return true;
+        } catch (error) {
+            console.error("Erro ao excluir produto:", error);
+            alert("Erro ao excluir do servidor.");
             return false;
         }
-
-        this.products[productIndex] = {
-            ...this.products[productIndex],
-            name: productData.name.trim(),
-            code: productData.code.trim().toUpperCase(),
-            quantity: parseInt(productData.quantity),
-            location: productData.location.trim(),
-            description: productData.description ? productData.description.trim() : '',
-            updatedAt: new Date().toISOString()
-        };
-
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
     }
 
-    deleteProduct(productId) {
-        const productIndex = this.products.findIndex(p => p.id === productId);
-        if (productIndex === -1) {
-            alert('Produto não encontrado');
-            return false;
-        }
-
-        this.products.splice(productIndex, 1);
-        this.saveToStorage();
-        this.applyCurrentFilter();
-        this.renderProducts();
-        this.updateStats();
-        return true;
+    // ===================== Validação =====================
+    validateProduct(productData) {
+        const errors = [];
+        if (!productData.name?.trim()) errors.push("Nome do item é obrigatório");
+        if (!productData.code?.trim()) errors.push("Código/ID é obrigatório");
+        if (productData.quantity === '' || productData.quantity < 0) errors.push("Quantidade deve ser maior ou igual a zero");
+        if (!productData.location?.trim()) errors.push("Local é obrigatório");
+        const existing = this.products.find(p => p.code.toLowerCase() === productData.code.toLowerCase() && p.id !== this.currentEditingId);
+        if (existing) errors.push("Já existe um produto com este código");
+        return errors;
     }
 
-    getProduct(productId) {
-        return this.products.find(p => p.id === productId);
-    }
-
+    // ===================== Filtros e busca =====================
     searchProducts(query) {
-        if (!query || query.trim().length === 0) {
-            this.filteredProducts = [...this.products];
-        } else {
-            const searchTerm = query.toLowerCase().trim();
-            this.filteredProducts = this.products.filter(product => 
-                product.name.toLowerCase().includes(searchTerm) ||
-                product.code.toLowerCase().includes(searchTerm) ||
-                product.location.toLowerCase().includes(searchTerm) ||
-                (product.description && product.description.toLowerCase().includes(searchTerm))
+        if (!query?.trim()) this.filteredProducts = [...this.products];
+        else {
+            const term = query.toLowerCase().trim();
+            this.filteredProducts = this.products.filter(p =>
+                p.name.toLowerCase().includes(term) ||
+                p.code.toLowerCase().includes(term) ||
+                p.location.toLowerCase().includes(term) ||
+                (p.description && p.description.toLowerCase().includes(term))
             );
         }
         this.renderProducts();
     }
 
     applyCurrentFilter() {
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput && searchInput.value.trim().length > 0) {
-            this.searchProducts(searchInput.value);
-        } else {
-            this.filteredProducts = [...this.products];
-        }
+        const searchInput = document.getElementById("searchInput");
+        if (searchInput?.value?.trim()) this.searchProducts(searchInput.value);
+        else this.filteredProducts = [...this.products];
     }
 
-    renderProducts() {
-        const productsList = document.getElementById('productsList');
-        const emptyState = document.getElementById('emptyState');
+    clearSearch() {
+        const searchInput = document.getElementById("searchInput");
+        searchInput.value = '';
+        this.searchProducts('');
+    }
 
+    // ===================== Renderização =====================
+    renderProducts() {
+        const productsList = document.getElementById("productsList");
+        const emptyState = document.getElementById("emptyState");
         if (this.filteredProducts.length === 0) {
-            productsList.style.display = 'none';
-            emptyState.style.display = 'block';
+            productsList.style.display = "none";
+            emptyState.style.display = "block";
             return;
         }
-
-        productsList.style.display = 'block';
-        emptyState.style.display = 'none';
-
-        productsList.innerHTML = this.filteredProducts.map(product => this.createProductHTML(product)).join('');
+        productsList.style.display = "block";
+        emptyState.style.display = "none";
+        productsList.innerHTML = this.filteredProducts.map(p => this.createProductHTML(p)).join('');
     }
 
-    createProductHTML(product) {
-        const quantityClass = this.getQuantityClass(product.quantity);
-        const formattedDate = new Date(product.updatedAt).toLocaleDateString('pt-BR');
-
+    createProductHTML(p) {
+        const quantityClass = p.quantity >= 50 ? 'quantity-high' : p.quantity >= 10 ? 'quantity-medium' : 'quantity-low';
+        const formattedDate = new Date(p.updatedAt).toLocaleDateString("pt-BR");
         return `
-            <div class="product-item" data-id="${product.id}">
-                <div class="product-header">
-                    <div class="product-info">
-                        <h3>${this.escapeHtml(product.name)}</h3>
-                        <div class="product-code">Código: ${this.escapeHtml(product.code)}</div>
-                    </div>
-                    <div class="product-actions">
-                        <button type="button" class="btn-edit" onclick="inventorySystem.editProduct('${product.id}')">Editar</button>
-                        <button type="button" class="btn-delete" onclick="inventorySystem.confirmDelete('${product.id}')">Excluir</button>
-                    </div>
+        <div class="product-item" data-id="${p.id}">
+            <div class="product-header">
+                <div class="product-info">
+                    <h3>${this.escapeHtml(p.name)}</h3>
+                    <div class="product-code">Código: ${this.escapeHtml(p.code)}</div>
                 </div>
-                <div class="product-details">
-                    <div class="product-detail">
-                        <div class="product-detail-label">Quantidade</div>
-                        <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity}</span></div>
-                    </div>
-                    <div class="product-detail">
-                        <div class="product-detail-label">Local</div>
-                        <div class="product-detail-value">${this.escapeHtml(product.location)}</div>
-                    </div>
-                    ${product.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(product.description)}</div></div>` : ''}
-                    <div class="product-detail">
-                        <div class="product-detail-label">Última atualização</div>
-                        <div class="product-detail-value">${formattedDate}</div>
-                    </div>
+                <div class="product-actions">
+                    <button onclick="inventorySystem.editProduct('${p.id}')" class="btn-edit">Editar</button>
+                    <button onclick="inventorySystem.confirmDelete('${p.id}')" class="btn-delete">Excluir</button>
                 </div>
             </div>
-        `;
-    }
-
-    getQuantityClass(quantity) {
-        if (quantity >= 50) return 'quantity-high';
-        if (quantity >= 10) return 'quantity-medium';
-        return 'quantity-low';
+            <div class="product-details">
+                <div class="product-detail">
+                    <div class="product-detail-label">Quantidade</div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${p.quantity}</span></div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Local</div>
+                    <div class="product-detail-value">${this.escapeHtml(p.location)}</div>
+                </div>
+                ${p.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(p.description)}</div></div>` : ''}
+                <div class="product-detail">
+                    <div class="product-detail-label">Última atualização</div>
+                    <div class="product-detail-value">${formattedDate}</div>
+                </div>
+            </div>
+        </div>`;
     }
 
     escapeHtml(text) {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
 
     updateStats() {
-        const totalItems = document.getElementById('totalItems');
-        const total = this.products.length;
-        const totalQuantity = this.products.reduce((sum, product) => sum + product.quantity, 0);
-        totalItems.textContent = `Total de itens: ${total} (${totalQuantity} unidades)`;
+        const totalItems = document.getElementById("totalItems");
+        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
+        totalItems.textContent = `Total de itens: ${this.products.length} (${totalQuantity} unidades)`;
     }
 
-    openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        const overlay = document.getElementById('modalOverlay');
-        modal.classList.add('active');
-        overlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-
-        // Foco automático somente ao abrir modal de produto
-        if (modalId === 'productModal') {
-            const nameInput = document.getElementById('productName');
-            if (nameInput) nameInput.focus();
-        }
+    // ===================== Modais e formulários =====================
+    openModal(id) {
+        document.getElementById(id).classList.add("active");
+        document.getElementById("modalOverlay").classList.add("active");
+        document.body.style.overflow = "hidden";
+        if (id === "productModal") document.getElementById("productName").focus();
     }
 
-    closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        const overlay = document.getElementById('modalOverlay');
-        modal.classList.remove('active');
-        overlay.classList.remove('active');
-        document.body.style.overflow = '';
-
-        if (modalId === 'productModal') {
+    closeModal(id) {
+        document.getElementById(id).classList.remove("active");
+        document.getElementById("modalOverlay").classList.remove("active");
+        document.body.style.overflow = "";
+        if (id === "productModal") {
             this.clearForm();
             this.currentEditingId = null;
         }
     }
 
-    clearForm() {
-        const form = document.getElementById('productForm');
-        form.reset();
-        const modalTitle = document.getElementById('modalTitle');
-        modalTitle.textContent = 'Adicionar Produto';
-    }
-
-    populateForm(product) {
-        document.getElementById('productName').value = product.name;
-        document.getElementById('productCode').value = product.code;
-        document.getElementById('productQuantity').value = product.quantity;
-        document.getElementById('productLocation').value = product.location;
-        document.getElementById('productDescription').value = product.description || '';
-        document.getElementById('modalTitle').textContent = 'Editar Produto';
+    clearForm() { document.getElementById("productForm").reset(); document.getElementById("modalTitle").textContent = "Adicionar Produto"; }
+    populateForm(p) {
+        document.getElementById("productName").value = p.name;
+        document.getElementById("productCode").value = p.code;
+        document.getElementById("productQuantity").value = p.quantity;
+        document.getElementById("productLocation").value = p.location;
+        document.getElementById("productDescription").value = p.description || '';
+        document.getElementById("modalTitle").textContent = "Editar Produto";
     }
 
     getFormData() {
         return {
-            name: document.getElementById('productName').value,
-            code: document.getElementById('productCode').value,
-            quantity: document.getElementById('productQuantity').value,
-            location: document.getElementById('productLocation').value,
-            description: document.getElementById('productDescription').value
+            name: document.getElementById("productName").value,
+            code: document.getElementById("productCode").value,
+            quantity: document.getElementById("productQuantity").value,
+            location: document.getElementById("productLocation").value,
+            description: document.getElementById("productDescription").value
         };
     }
 
-    addNewProduct() {
-        this.currentEditingId = null;
-        this.clearForm();
-        this.openModal('productModal');
-    }
+    addNewProduct() { this.currentEditingId = null; this.clearForm(); this.openModal("productModal"); }
+    editProduct(id) { const p = this.products.find(p=>p.id===id); if(!p) return alert("Produto não encontrado"); this.currentEditingId = id; this.populateForm(p); this.openModal("productModal"); }
+    confirmDelete(id) { const p=this.products.find(p=>p.id===id); if(!p)return alert("Produto não encontrado"); document.getElementById("deleteProductName").textContent=p.name; this.productToDelete=id; this.openModal("confirmModal"); }
+    async executeDelete() { if(this.productToDelete){ await this.deleteProduct(this.productToDelete); this.productToDelete=null; this.closeModal("confirmModal"); } }
 
-    editProduct(productId) {
-        const product = this.getProduct(productId);
-        if (!product) { alert('Produto não encontrado'); return; }
-        this.currentEditingId = productId;
-        this.populateForm(product);
-        this.openModal('productModal');
-    }
-
-    confirmDelete(productId) {
-        const product = this.getProduct(productId);
-        if (!product) { alert('Produto não encontrado'); return; }
-        document.getElementById('deleteProductName').textContent = product.name;
-        this.productToDelete = productId;
-        this.openModal('confirmModal');
-    }
-
-    executeDelete() {
-        if (this.productToDelete) {
-            this.deleteProduct(this.productToDelete);
-            this.productToDelete = null;
-            this.closeModal('confirmModal');
-        }
-    }
-
-    saveProduct() {
-        const formData = this.getFormData();
+    async saveProduct() {
+        const data = this.getFormData();
         let success = false;
-
-        if (this.currentEditingId) {
-            success = this.updateProduct(formData);
-        } else {
-            success = this.addProduct(formData);
-        }
-
-        if (success) this.closeModal('productModal');
+        if (this.currentEditingId) success = await this.updateProduct(data);
+        else success = await this.addProduct(data);
+        if (success) this.closeModal("productModal");
     }
 
-    clearSearch() {
-        const searchInput = document.getElementById('searchInput');
-        searchInput.value = '';
-        this.searchProducts('');
-    }
-
+    // ===================== Eventos =====================
     bindEvents() {
-        document.getElementById('addItemBtn').addEventListener('click', () => this.addNewProduct());
-        document.getElementById('searchInput').addEventListener('input', (e) => this.searchProducts(e.target.value));
-        document.getElementById('clearSearch').addEventListener('click', () => this.clearSearch());
-        document.getElementById('closeModal').addEventListener('click', () => this.closeModal('productModal'));
-        document.getElementById('cancelBtn').addEventListener('click', () => this.closeModal('productModal'));
-        document.getElementById('productForm').addEventListener('submit', (e) => { e.preventDefault(); this.saveProduct(); });
-        document.getElementById('cancelDelete').addEventListener('click', () => this.closeModal('confirmModal'));
-        document.getElementById('confirmDelete').addEventListener('click', () => this.executeDelete());
-
-        // Overlay
-        document.getElementById('modalOverlay').addEventListener('click', () => {
-            const activeModal = document.querySelector('.modal.active');
-            if (activeModal) this.closeModal(activeModal.id);
+        document.getElementById("addItemBtn").addEventListener("click", () => this.addNewProduct());
+        document.getElementById("searchInput").addEventListener("input", e => this.searchProducts(e.target.value));
+        document.getElementById("clearSearch").addEventListener("click", () => this.clearSearch());
+        document.getElementById("closeModal").addEventListener("click", () => this.closeModal("productModal"));
+        document.getElementById("cancelBtn").addEventListener("click", () => this.closeModal("productModal"));
+        document.getElementById("productForm").addEventListener("submit", e => { e.preventDefault(); this.saveProduct(); });
+        document.getElementById("cancelDelete").addEventListener("click", () => this.closeModal("confirmModal"));
+        document.getElementById("confirmDelete").addEventListener("click", () => this.executeDelete());
+        document.getElementById("modalOverlay").addEventListener("click", () => {
+            const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id);
         });
-
-        // Tecla ESC
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const activeModal = document.querySelector('.modal.active');
-                if (activeModal) this.closeModal(activeModal.id);
-            }
-        });
-
-        // Prevenir fechamento ao clicar dentro do modal
-        document.querySelectorAll('.modal-content').forEach(content => {
-            content.addEventListener('click', (e) => e.stopPropagation());
-        });
-
-        // REMOVIDO: transitionend que causava reset de foco
+        document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id); }});
+        document.querySelectorAll(".modal-content").forEach(c=>c.addEventListener("click", e=>e.stopPropagation()));
     }
 }
 
