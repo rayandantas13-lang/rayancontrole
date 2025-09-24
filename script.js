@@ -57,7 +57,7 @@ class InventorySystem {
         const product = {
             name: productData.name.trim(),
             code: productData.code.trim().toUpperCase(),
-            quantity: parseInt(productData.quantity),
+            quantity: parseFloat(productData.quantity),
             location: productData.location.trim(),
             description: productData.description?.trim() || '',
             createdAt: new Date().toISOString(),
@@ -83,7 +83,7 @@ class InventorySystem {
             await updateDoc(ref, {
                 ...productData,
                 code: productData.code.trim().toUpperCase(),
-                quantity: parseInt(productData.quantity),
+                quantity: parseFloat(productData.quantity),
                 updatedAt: new Date().toISOString()
             });
             return true;
