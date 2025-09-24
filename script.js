@@ -1,22 +1,22 @@
 // ===================== Firebase Config =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
-    getFirestore, collection, addDoc, getDocs, onSnapshot, 
-    updateDoc, deleteDoc, doc 
+  getFirestore, collection, addDoc, getDocs, onSnapshot, 
+  updateDoc, deleteDoc, doc 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ⚠️ Substitua pelos dados do seu Firebase (Configurações do app web)
+// Configuração do seu Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
   projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.firebasestorage.app",
+  storageBucket: "almoxarifado-348d5.appspot.com", // ⚠️ CONFERE ISSO NO PAINEL
   messagingSenderId: "295782162128",
   appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
   measurementId: "G-PC0FREL2DF"
 };
 
-// Inicializa Firebase e Firestore
+// Inicializa Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
