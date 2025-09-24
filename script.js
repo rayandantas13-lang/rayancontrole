@@ -279,4 +279,5 @@ let inventorySystem;
 
 document.addEventListener('DOMContentLoaded', () => {
     inventorySystem = new InventorySystem();
+    window.inventorySystem = inventorySystem; // 🔑 deixa acessível para o HTML
 });
