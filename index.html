@@ -102,30 +102,8 @@
         <!-- Overlay para modais -->
         <div id="modalOverlay" class="modal-overlay"></div>
     </div>
-
-      <!-- ===================== FIREBASE CDN ===================== -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
-
-        // Configuração do Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
-            authDomain: "almoxarifado-348d5.firebaseapp.com",
-            projectId: "almoxarifado-348d5",
-            storageBucket: "almoxarifado-348d5.firebasestorage.app",
-            messagingSenderId: "295782162128",
-            appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
-            measurementId: "G-PC0FREL2DF"
-        };
-
-        // Inicializa Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        window.db = db; // para depuração no console
-    </script>
     
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
 
