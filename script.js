@@ -5,22 +5,22 @@ import {
   updateDoc, deleteDoc, doc 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Configuração do seu Firebase
+// ⚠️ COLE AQUI O firebaseConfig DO PAINEL DO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
   projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.appspot.com", // ⚠️ CONFERE ISSO NO PAINEL
+  storageBucket: "almoxarifado-348d5.firebasestorage.app",
   messagingSenderId: "295782162128",
   appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
   measurementId: "G-PC0FREL2DF"
 };
 
-// Inicializa Firebase
+// Inicializa Firebase e Firestore
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ===================== Sistema de Controle de Estoque =====================
+// ===================== Sistema de Estoque =====================
 class InventorySystem {
     constructor() {
         this.products = [];
@@ -279,57 +279,4 @@ let inventorySystem;
 
 document.addEventListener('DOMContentLoaded', () => {
     inventorySystem = new InventorySystem();
-    
-    if (inventorySystem.products.length === 0) {
-        const exampleProducts = [
-            { name: 'Papel A4 75g', code: 'PAP001', quantity: 150, location: 'Prateleira A1', description: 'Papel sulfite branco para impressão' },
-            { name: 'Caneta Esferográfica Azul', code: 'CAN001', quantity: 25, location: 'Gaveta B2', description: 'Caneta esferográfica ponta média' },
-            { name: 'Grampeador', code: 'GRA001', quantity: 5, location: 'Prateleira C1', description: 'Grampeador para até 20 folhas' }
-        ];
-
-        if (confirm('Deseja carregar alguns produtos de exemplo para testar o sistema?')) {
-            exampleProducts.forEach(productData => inventorySystem.addProduct(productData));
-        }
-    }
 });
-
-// Exportar e importar
-function exportData() {
-    const dataStr = JSON.stringify(inventorySystem.products, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `estoque_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-}
-
-function importData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const importedData = JSON.parse(e.target.result);
-                if (Array.isArray(importedData)) {
-                    if (confirm('Isso substituirá todos os dados atuais. Continuar?')) {
-                        inventorySystem.products = importedData;
-                        inventorySystem.applyCurrentFilter();
-                        inventorySystem.renderProducts();
-                        inventorySystem.updateStats();
-                        alert('Dados importados com sucesso!');
-                    }
-                } else {
-                    alert('Formato de arquivo inválido');
-                }
-            } catch (error) {
-                alert('Erro ao importar arquivo: ' + error.message);
-            }
-        };
-        reader.readAsText(file);
-    };
-    input.click();
-}
