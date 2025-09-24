@@ -1,5 +1,26 @@
-// Sistema de Controle de Estoque - JavaScript
+// ===================== Firebase Config =====================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { 
+    getFirestore, collection, addDoc, getDocs, onSnapshot, 
+    updateDoc, deleteDoc, doc 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// ⚠️ Substitua pelos dados do seu Firebase (Configurações do app web)
+const firebaseConfig = {
+  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
+  authDomain: "almoxarifado-348d5.firebaseapp.com",
+  projectId: "almoxarifado-348d5",
+  storageBucket: "almoxarifado-348d5.firebasestorage.app",
+  messagingSenderId: "295782162128",
+  appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
+  measurementId: "G-PC0FREL2DF"
+};
+
+// Inicializa Firebase e Firestore
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ===================== Sistema de Controle de Estoque =====================
 class InventorySystem {
     constructor() {
         this.products = [];
@@ -19,7 +40,6 @@ class InventorySystem {
     async loadFromFirestore() {
         try {
             const colRef = collection(db, "products");
-            // Atualização em tempo real
             onSnapshot(colRef, (snapshot) => {
                 this.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this.applyCurrentFilter();
@@ -297,7 +317,6 @@ function importData() {
                 if (Array.isArray(importedData)) {
                     if (confirm('Isso substituirá todos os dados atuais. Continuar?')) {
                         inventorySystem.products = importedData;
-                        inventorySystem.saveToStorage();
                         inventorySystem.applyCurrentFilter();
                         inventorySystem.renderProducts();
                         inventorySystem.updateStats();
