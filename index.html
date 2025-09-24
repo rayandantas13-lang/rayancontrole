@@ -14,35 +14,55 @@
         </header>
 
         <main>
-            <!-- Seção de busca -->
-            <section class="search-section">
-                <div class="search-container">
-                    <input type="text" id="searchInput" placeholder="Buscar produtos por nome, código ou local...">
-                    <button type="button" id="clearSearch">Limpar</button>
-                </div>
-            </section>
+            <!-- 🔹 NOVO: Abas -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="estoque">Estoque</button>
+                <button class="tab-btn" data-tab="requisicoes">Requisições</button>
+            </div>
 
-            <!-- Botão para adicionar novo item -->
-            <section class="actions-section">
-                <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
-                <div class="stats">
-                    <span id="totalItems">Total de itens: 0</span>
-                </div>
-            </section>
+            <!-- 🔹 Aba Estoque (seu conteúdo original dentro dela) -->
+            <div class="tab-content active" id="tab-estoque">
+                <!-- Seção de busca -->
+                <section class="search-section">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" placeholder="Buscar produtos por nome, código ou local...">
+                        <button type="button" id="clearSearch">Limpar</button>
+                    </div>
+                </section>
 
-            <!-- Lista de produtos -->
-            <section class="products-section">
-                <div class="products-header">
-                    <h2>Produtos em Estoque</h2>
-                </div>
-                <div id="productsList" class="products-list">
-                    <!-- Produtos renderizados dinamicamente -->
-                </div>
-                <div id="emptyState" class="empty-state">
-                    <p>Nenhum produto encontrado no estoque.</p>
-                    <p>Clique em "Adicionar Item" para começar.</p>
-                </div>
-            </section>
+                <!-- Botão para adicionar novo item -->
+                <section class="actions-section">
+                    <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
+                    <div class="stats">
+                        <span id="totalItems">Total de itens: 0</span>
+                    </div>
+                </section>
+
+                <!-- Lista de produtos -->
+                <section class="products-section">
+                    <div class="products-header">
+                        <h2>Produtos em Estoque</h2>
+                    </div>
+                    <div id="productsList" class="products-list"></div>
+                    <div id="emptyState" class="empty-state">
+                        <p>Nenhum produto encontrado no estoque.</p>
+                        <p>Clique em "Adicionar Item" para começar.</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 🔹 Aba Requisições -->
+            <div class="tab-content" id="tab-requisicoes">
+                <section class="requisicoes-section">
+                    <div class="requisicoes-header">
+                        <h2>Requisições</h2>
+                        <button type="button" id="novaRequisicaoBtn" class="btn-primary">+ Nova Requisição</button>
+                    </div>
+                    <div id="requisicoesList" class="requisicoes-list">
+                        <!-- Requisições renderizadas dinamicamente -->
+                    </div>
+                </section>
+            </div>
         </main>
 
         <!-- Modal para adicionar/editar produtos -->
@@ -96,6 +116,33 @@
                     <button type="button" id="cancelDelete" class="btn-secondary">Cancelar</button>
                     <button type="button" id="confirmDelete" class="btn-danger">Excluir</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- 🔹 Novo Modal: Nova Requisição -->
+        <div id="requisicaoModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Nova Requisição</h3>
+                    <button type="button" class="close-btn" onclick="inventorySystem.closeModal('requisicaoModal')">&times;</button>
+                </div>
+                <form id="requisicaoForm">
+                    <div class="form-group">
+                        <label for="departamento">Departamento/Setor</label>
+                        <select id="departamento" required>
+                            <option value="">Selecione</option>
+                            <option value="BISCOITO">BISCOITO</option>
+                            <option value="EMBALAGEM">EMBALAGEM</option>
+                            <option value="TI">TI</option>
+                            <!-- Pode puxar dinamicamente depois -->
+                        </select>
+                    </div>
+                    <div id="produtosRequisicao"></div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="inventorySystem.closeModal('requisicaoModal')">Cancelar</button>
+                        <button type="submit" class="btn-primary">Salvar Requisição</button>
+                    </div>
+                </form>
             </div>
         </div>
 
