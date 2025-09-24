@@ -5,7 +5,6 @@ import {
   updateDoc, deleteDoc, doc 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// ⚠️ COLE AQUI O firebaseConfig DO PAINEL DO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
@@ -171,8 +170,8 @@ class InventorySystem {
                     <div class="product-code">Código: ${this.escapeHtml(p.code)}</div>
                 </div>
                 <div class="product-actions">
-                    <button onclick="inventorySystem.editProduct('${p.id}')" class="btn-edit">Editar</button>
-                    <button onclick="inventorySystem.confirmDelete('${p.id}')" class="btn-delete">Excluir</button>
+                    <button class="btn-edit" data-action="edit" data-id="${p.id}">Editar</button>
+                    <button class="btn-delete" data-action="delete" data-id="${p.id}">Excluir</button>
                 </div>
             </div>
             <div class="product-details">
@@ -271,13 +270,21 @@ class InventorySystem {
         });
         document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id); }});
         document.querySelectorAll(".modal-content").forEach(c=>c.addEventListener("click", e=>e.stopPropagation()));
+
+        // Eventos dinâmicos para os botões "Editar" e "Excluir"
+        document.getElementById("productsList").addEventListener("click", e => {
+            if (e.target.matches("[data-action='edit']")) {
+                this.editProduct(e.target.dataset.id);
+            }
+            if (e.target.matches("[data-action='delete']")) {
+                this.confirmDelete(e.target.dataset.id);
+            }
+        });
     }
 }
 
 // ===================== Inicialização =====================
-let inventorySystem;
-
 document.addEventListener('DOMContentLoaded', () => {
-    inventorySystem = new InventorySystem();
-    window.inventorySystem = inventorySystem; // 🔑 deixa acessível para o HTML
+    const inventorySystem = new InventorySystem();
+    window.inventorySystem = inventorySystem; // só para depuração no console
 });
