@@ -1,104 +1,109 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de Almoxarifado</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Controle de Estoque - Almoxarifado</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Controle de Almoxarifado</h1>
-    <nav>
-      <button class="tab-btn active" data-tab="estoque">Produtos em Estoque</button>
-      <button class="tab-btn" data-tab="requisicoes">Produtos Requisitados</button>
-      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
-    </nav>
-  </header>
+    <div class="container">
+        <header>
+            <h1>Sistema de Controle de Estoque</h1>
+            <p>Gerenciamento de Almoxarifado</p>
+        </header>
 
-  <main>
-    <!-- ABA ESTOQUE -->
-    <section id="estoque" class="tab-content active">
-      <div class="actions">
-        <button id="addItemBtn">+ Adicionar Produto</button>
-        <input type="text" id="searchInput" placeholder="Buscar produto...">
-        <button id="clearSearch">Limpar</button>
-      </div>
-      <div id="totalItems"></div>
-      <div id="productsList"></div>
-      <div id="emptyState" style="display:none;">Nenhum produto cadastrado.</div>
-    </section>
+        <main>
+            <!-- Seção de busca -->
+            <section class="search-section">
+                <div class="search-container">
+                    <input type="text" id="searchInput" placeholder="Buscar produtos por nome, código ou local...">
+                    <button type="button" id="clearSearch">Limpar</button>
+                </div>
+            </section>
 
-    <!-- ABA REQUISIÇÕES -->
-    <section id="requisicoes" class="tab-content">
-      <h2>Produtos Requisitados</h2>
-      <div id="requisitionsList"></div>
-      <div id="emptyRequisitions" style="display:none;">Nenhuma requisição encontrada.</div>
-      <div class="export-buttons">
-        <button id="exportExcel">Exportar Excel</button>
-        <button id="exportPDF">Exportar PDF</button>
-      </div>
-    </section>
+            <!-- Botão para adicionar novo item -->
+            <section class="actions-section">
+                <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
+                <div class="stats">
+                    <span id="totalItems">Total de itens: 0</span>
+                </div>
+            </section>
 
-    <!-- ABA DASHBOARD -->
-    <section id="dashboard" class="tab-content">
-      <h2>Dashboard</h2>
-      <div id="dashboardContent">
-        <p>Total de produtos cadastrados: <span id="dashTotalProducts">0</span></p>
-        <p>Total de requisições feitas: <span id="dashTotalRequisitions">0</span></p>
-        <p>Quantidade total em estoque: <span id="dashTotalQuantity">0</span></p>
-      </div>
-    </section>
-  </main>
+            <!-- Lista de produtos -->
+            <section class="products-section">
+                <div class="products-header">
+                    <h2>Produtos em Estoque</h2>
+                </div>
+                <div id="productsList" class="products-list">
+                    <!-- Produtos renderizados dinamicamente -->
+                </div>
+                <div id="emptyState" class="empty-state">
+                    <p>Nenhum produto encontrado no estoque.</p>
+                    <p>Clique em "Adicionar Item" para começar.</p>
+                </div>
+            </section>
+        </main>
 
-  <!-- MODAIS -->
-  <div id="modalOverlay" class="overlay"></div>
-
-  <!-- Modal Produto -->
-  <div id="productModal" class="modal">
-    <div class="modal-content">
-      <h2 id="modalTitle">Adicionar Produto</h2>
-      <form id="productForm">
-        <input type="text" id="productName" placeholder="Nome do produto" required>
-        <input type="text" id="productCode" placeholder="Código/ID" required>
-        <input type="number" id="productQuantity" placeholder="Quantidade" required>
-        <input type="text" id="productLocation" placeholder="Localização" required>
-        <textarea id="productDescription" placeholder="Descrição"></textarea>
-        <div class="modal-actions">
-          <button type="submit">Salvar</button>
-          <button type="button" id="cancelBtn">Cancelar</button>
+        <!-- Modal para adicionar/editar produtos -->
+        <div id="productModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Adicionar Produto</h3>
+                    <button type="button" id="closeModal" class="close-btn">&times;</button>
+                </div>
+                <form id="productForm">
+                    <div class="form-group">
+                        <label for="productName">Nome do Item *</label>
+                        <input type="text" id="productName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productCode">Código/ID *</label>
+                        <input type="text" id="productCode" name="code" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productQuantity">Quantidade em Estoque *</label>
+                        <input type="number" id="productQuantity" name="quantity" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productLocation">Local (Setor/Prateleira) *</label>
+                        <input type="text" id="productLocation" name="location" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productDescription">Descrição (Opcional)</label>
+                        <textarea id="productDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="cancelBtn" class="btn-secondary">Cancelar</button>
+                        <button type="submit" id="saveBtn" class="btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <!-- Modal Exclusão -->
-  <div id="confirmModal" class="modal">
-    <div class="modal-content">
-      <h2>Confirmar Exclusão</h2>
-      <p>Deseja realmente excluir <strong id="deleteProductName"></strong>?</p>
-      <div class="modal-actions">
-        <button id="confirmDelete">Excluir</button>
-        <button id="cancelDelete">Cancelar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Requisição -->
-  <div id="requisitionModal" class="modal">
-    <div class="modal-content">
-      <h2>Requisitar Produto</h2>
-      <form id="requisitionForm">
-        <p><strong id="reqProductName"></strong> (Estoque: <span id="reqProductStock"></span>)</p>
-        <input type="number" id="reqQuantity" placeholder="Quantidade a requisitar" required>
-        <div class="modal-actions">
-          <button type="submit">Confirmar</button>
-          <button type="button" id="cancelReqBtn">Cancelar</button>
+        <!-- Modal de confirmação para exclusão -->
+        <div id="confirmModal" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h3>Confirmar Exclusão</h3>
+                </div>
+                <div class="modal-body">
+                    <p>Tem certeza que deseja excluir este produto?</p>
+                    <p><strong id="deleteProductName"></strong></p>
+                    <p>Esta ação não pode ser desfeita.</p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancelDelete" class="btn-secondary">Cancelar</button>
+                    <button type="button" id="confirmDelete" class="btn-danger">Excluir</button>
+                </div>
+            </div>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <script type="module" src="app.js"></script>
+        <!-- Overlay para modais -->
+        <div id="modalOverlay" class="modal-overlay"></div>
+    </div>
+    
+    <!-- Script principal -->
+    <script type="module" src="script.js"></script>
 </body>
 </html>
