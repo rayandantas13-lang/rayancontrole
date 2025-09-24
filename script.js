@@ -19,272 +19,202 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ===================== Sistema de Estoque =====================
+// ====================
+// Sistema de Estoque
+// ====================
 class InventorySystem {
     constructor() {
         this.products = [];
-        this.currentEditingId = null;
-        this.filteredProducts = [];
-        this.productToDelete = null;
-
-        this.init();
+        this.loadProducts();
     }
 
-    init() {
-        this.bindEvents();
-        this.loadFromFirestore();
-    }
-
-    // ===================== Firestore =====================
-    async loadFromFirestore() {
-        try {
-            const colRef = collection(db, "products");
-            onSnapshot(colRef, (snapshot) => {
-                this.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                this.applyCurrentFilter();
-                this.renderProducts();
-                this.updateStats();
-            });
-        } catch (error) {
-            console.error("Erro ao carregar produtos do Firestore:", error);
-        }
-    }
-
-    async addProduct(productData) {
-        const errors = this.validateProduct(productData);
-        if (errors.length > 0) { alert(errors.join("\n")); return false; }
-
-        const product = {
-            name: productData.name.trim(),
-            code: productData.code.trim().toUpperCase(),
-            quantity: parseFloat(productData.quantity),
-            location: productData.location.trim(),
-            description: productData.description?.trim() || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        try {
-            await addDoc(collection(db, "products"), product);
-            return true;
-        } catch (error) {
-            console.error("Erro ao adicionar produto:", error);
-            alert("Erro ao salvar no servidor.");
-            return false;
-        }
-    }
-
-    async updateProduct(productData) {
-        const errors = this.validateProduct(productData);
-        if (errors.length > 0) { alert(errors.join("\n")); return false; }
-
-        try {
-            const ref = doc(db, "products", this.currentEditingId);
-            await updateDoc(ref, {
-                ...productData,
-                code: productData.code.trim().toUpperCase(),
-                quantity: parseFloat(productData.quantity),
-                updatedAt: new Date().toISOString()
-            });
-            return true;
-        } catch (error) {
-            console.error("Erro ao atualizar produto:", error);
-            alert("Erro ao atualizar no servidor.");
-            return false;
-        }
-    }
-
-    async deleteProduct(productId) {
-        try {
-            const ref = doc(db, "products", productId);
-            await deleteDoc(ref);
-            return true;
-        } catch (error) {
-            console.error("Erro ao excluir produto:", error);
-            alert("Erro ao excluir do servidor.");
-            return false;
-        }
-    }
-
-    // ===================== Validação =====================
-    validateProduct(productData) {
-        const errors = [];
-        if (!productData.name?.trim()) errors.push("Nome do item é obrigatório");
-        if (!productData.code?.trim()) errors.push("Código/ID é obrigatório");
-        if (productData.quantity === '' || productData.quantity < 0) errors.push("Quantidade deve ser maior ou igual a zero");
-        if (!productData.location?.trim()) errors.push("Local é obrigatório");
-        const existing = this.products.find(p => p.code.toLowerCase() === productData.code.toLowerCase() && p.id !== this.currentEditingId);
-        if (existing) errors.push("Já existe um produto com este código");
-        return errors;
-    }
-
-    // ===================== Filtros e busca =====================
-    searchProducts(query) {
-        if (!query?.trim()) this.filteredProducts = [...this.products];
-        else {
-            const term = query.toLowerCase().trim();
-            this.filteredProducts = this.products.filter(p =>
-                p.name.toLowerCase().includes(term) ||
-                p.code.toLowerCase().includes(term) ||
-                p.location.toLowerCase().includes(term) ||
-                (p.description && p.description.toLowerCase().includes(term))
-            );
-        }
+    async loadProducts() {
+        // 🔹 Carregar produtos do Firestore
+        // this.products = await getDocs(...) 
+        // (mantém igual ao seu, só exemplificando)
         this.renderProducts();
     }
 
-    applyCurrentFilter() {
-        const searchInput = document.getElementById("searchInput");
-        if (searchInput?.value?.trim()) this.searchProducts(searchInput.value);
-        else this.filteredProducts = [...this.products];
-    }
-
-    clearSearch() {
-        const searchInput = document.getElementById("searchInput");
-        searchInput.value = '';
-        this.searchProducts('');
-    }
-
-    // ===================== Renderização =====================
     renderProducts() {
-        const productsList = document.getElementById("productsList");
-        const emptyState = document.getElementById("emptyState");
-        if (this.filteredProducts.length === 0) {
-            productsList.style.display = "none";
-            emptyState.style.display = "block";
+        const list = document.getElementById("productsList");
+        const empty = document.getElementById("emptyState");
+
+        list.innerHTML = "";
+        if (this.products.length === 0) {
+            empty.style.display = "block";
             return;
         }
-        productsList.style.display = "block";
-        emptyState.style.display = "none";
-        productsList.innerHTML = this.filteredProducts.map(p => this.createProductHTML(p)).join('');
+
+        empty.style.display = "none";
+        this.products.forEach(prod => {
+            const div = document.createElement("div");
+            div.classList.add("product-card");
+            div.innerHTML = `
+                <h4>${prod.name}</h4>
+                <p><strong>Código:</strong> ${prod.code}</p>
+                <p><strong>Qtd:</strong> ${prod.quantity}</p>
+                <p><strong>Local:</strong> ${prod.location}</p>
+            `;
+            list.appendChild(div);
+        });
+        document.getElementById("totalItems").textContent = `Total de itens: ${this.products.length}`;
     }
 
-    createProductHTML(p) {
-        const quantityClass = p.quantity >= 50 ? 'quantity-high' : p.quantity >= 10 ? 'quantity-medium' : 'quantity-low';
-        const formattedDate = new Date(p.updatedAt).toLocaleDateString("pt-BR");
-        return `
-        <div class="product-item" data-id="${p.id}">
-            <div class="product-header">
-                <div class="product-info">
-                    <h3>${this.escapeHtml(p.name)}</h3>
-                    <div class="product-code">Código: ${this.escapeHtml(p.code)}</div>
-                </div>
-                <div class="product-actions">
-                    <button class="btn-edit" data-action="edit" data-id="${p.id}">Editar</button>
-                    <button class="btn-delete" data-action="delete" data-id="${p.id}">Excluir</button>
-                </div>
-            </div>
-            <div class="product-details">
-                <div class="product-detail">
-                    <div class="product-detail-label">Quantidade</div>
-                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${p.quantity}</span></div>
-                </div>
-                <div class="product-detail">
-                    <div class="product-detail-label">Local</div>
-                    <div class="product-detail-value">${this.escapeHtml(p.location)}</div>
-                </div>
-                ${p.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(p.description)}</div></div>` : ''}
-                <div class="product-detail">
-                    <div class="product-detail-label">Última atualização</div>
-                    <div class="product-detail-value">${formattedDate}</div>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement("div");
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    updateStats() {
-        const totalItems = document.getElementById("totalItems");
-        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
-        totalItems.textContent = `Total de itens: ${this.products.length} (${totalQuantity} unidades)`;
-    }
-
-    // ===================== Modais e formulários =====================
+    // 🔹 Utilitário para abrir/fechar modais
     openModal(id) {
-        document.getElementById(id).classList.add("active");
-        document.getElementById("modalOverlay").classList.add("active");
-        document.body.style.overflow = "hidden";
-        if (id === "productModal") document.getElementById("productName").focus();
+        document.getElementById(id).style.display = "block";
+        document.getElementById("modalOverlay").style.display = "block";
     }
 
     closeModal(id) {
-        document.getElementById(id).classList.remove("active");
-        document.getElementById("modalOverlay").classList.remove("active");
-        document.body.style.overflow = "";
-        if (id === "productModal") {
-            this.clearForm();
-            this.currentEditingId = null;
-        }
+        document.getElementById(id).style.display = "none";
+        document.getElementById("modalOverlay").style.display = "none";
+    }
+}
+
+// ====================
+// Sistema de Requisições
+// ====================
+class RequisitionSystem {
+    constructor(inventory) {
+        this.inventory = inventory;
+        this.requisicoes = [];
+        this.bindEvents();
     }
 
-    clearForm() { document.getElementById("productForm").reset(); document.getElementById("modalTitle").textContent = "Adicionar Produto"; }
-    populateForm(p) {
-        document.getElementById("productName").value = p.name;
-        document.getElementById("productCode").value = p.code;
-        document.getElementById("productQuantity").value = p.quantity;
-        document.getElementById("productLocation").value = p.location;
-        document.getElementById("productDescription").value = p.description || '';
-        document.getElementById("modalTitle").textContent = "Editar Produto";
-    }
-
-    getFormData() {
-        return {
-            name: document.getElementById("productName").value,
-            code: document.getElementById("productCode").value,
-            quantity: document.getElementById("productQuantity").value,
-            location: document.getElementById("productLocation").value,
-            description: document.getElementById("productDescription").value
-        };
-    }
-
-    addNewProduct() { this.currentEditingId = null; this.clearForm(); this.openModal("productModal"); }
-    editProduct(id) { const p = this.products.find(p=>p.id===id); if(!p) return alert("Produto não encontrado"); this.currentEditingId = id; this.populateForm(p); this.openModal("productModal"); }
-    confirmDelete(id) { const p=this.products.find(p=>p.id===id); if(!p)return alert("Produto não encontrado"); document.getElementById("deleteProductName").textContent=p.name; this.productToDelete=id; this.openModal("confirmModal"); }
-    async executeDelete() { if(this.productToDelete){ await this.deleteProduct(this.productToDelete); this.productToDelete=null; this.closeModal("confirmModal"); } }
-
-    async saveProduct() {
-        const data = this.getFormData();
-        let success = false;
-        if (this.currentEditingId) success = await this.updateProduct(data);
-        else success = await this.addProduct(data);
-        if (success) this.closeModal("productModal");
-    }
-
-    // ===================== Eventos =====================
     bindEvents() {
-        document.getElementById("addItemBtn").addEventListener("click", () => this.addNewProduct());
-        document.getElementById("searchInput").addEventListener("input", e => this.searchProducts(e.target.value));
-        document.getElementById("clearSearch").addEventListener("click", () => this.clearSearch());
-        document.getElementById("closeModal").addEventListener("click", () => this.closeModal("productModal"));
-        document.getElementById("cancelBtn").addEventListener("click", () => this.closeModal("productModal"));
-        document.getElementById("productForm").addEventListener("submit", e => { e.preventDefault(); this.saveProduct(); });
-        document.getElementById("cancelDelete").addEventListener("click", () => this.closeModal("confirmModal"));
-        document.getElementById("confirmDelete").addEventListener("click", () => this.executeDelete());
-        document.getElementById("modalOverlay").addEventListener("click", () => {
-            const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id);
+        // Botão para abrir modal
+        document.getElementById("novaRequisicaoBtn").addEventListener("click", () => {
+            this.loadProdutosNoFormulario();
+            this.inventory.openModal("requisicaoModal");
         });
-        document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id); }});
-        document.querySelectorAll(".modal-content").forEach(c=>c.addEventListener("click", e=>e.stopPropagation()));
 
-        // Eventos dinâmicos para os botões "Editar" e "Excluir"
-        document.getElementById("productsList").addEventListener("click", e => {
-            if (e.target.matches("[data-action='edit']")) {
-                this.editProduct(e.target.dataset.id);
+        // Formulário de requisição
+        document.getElementById("requisicaoForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            this.salvarRequisicao();
+        });
+
+        // Quando muda o departamento, filtra produtos
+        document.getElementById("departamento").addEventListener("change", () => {
+            this.loadProdutosNoFormulario();
+        });
+    }
+
+    loadProdutosNoFormulario() {
+        const departamento = document.getElementById("departamento").value;
+        const container = document.getElementById("produtosRequisicao");
+        container.innerHTML = "";
+
+        if (!departamento) return;
+
+        // Filtra produtos do estoque pelo local/departamento
+        const produtos = this.inventory.products.filter(p => 
+            p.location.toUpperCase() === departamento.toUpperCase()
+        );
+
+        if (produtos.length === 0) {
+            container.innerHTML = `<p>Nenhum produto disponível neste setor.</p>`;
+            return;
+        }
+
+        produtos.forEach(p => {
+            const div = document.createElement("div");
+            div.classList.add("req-item");
+            div.innerHTML = `
+                <label>
+                    <input type="checkbox" name="prodSelecionado" value="${p.code}">
+                    ${p.name} (Qtd disponível: ${p.quantity})
+                </label>
+                <input type="number" class="qtd-req" min="1" max="${p.quantity}" placeholder="Qtd">
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    async salvarRequisicao() {
+        const departamento = document.getElementById("departamento").value;
+        const itens = [];
+        const checkboxes = document.querySelectorAll("#produtosRequisicao input[type=checkbox]:checked");
+
+        checkboxes.forEach((cb, i) => {
+            const qtdInput = cb.parentElement.parentElement.querySelector(".qtd-req");
+            if (qtdInput && qtdInput.value > 0) {
+                itens.push({
+                    code: cb.value,
+                    quantidade: parseInt(qtdInput.value)
+                });
             }
-            if (e.target.matches("[data-action='delete']")) {
-                this.confirmDelete(e.target.dataset.id);
-            }
+        });
+
+        if (itens.length === 0) {
+            alert("Selecione ao menos 1 produto com quantidade.");
+            return;
+        }
+
+        const requisicao = {
+            departamento,
+            itens,
+            data: new Date().toISOString(),
+            status: "Pendente"
+        };
+
+        // 🔹 Salvar no Firestore
+        // await addDoc(collection(db, "requisicoes"), requisicao);
+
+        this.requisicoes.push(requisicao);
+        this.renderRequisicoes();
+
+        this.inventory.closeModal("requisicaoModal");
+    }
+
+    renderRequisicoes() {
+        const list = document.getElementById("requisicoesList");
+        list.innerHTML = "";
+
+        if (this.requisicoes.length === 0) {
+            list.innerHTML = `<p>Nenhuma requisição registrada.</p>`;
+            return;
+        }
+
+        this.requisicoes.forEach(r => {
+            const div = document.createElement("div");
+            div.classList.add("requisicao-card");
+            div.innerHTML = `
+                <h4>${r.departamento}</h4>
+                <p><strong>Status:</strong> ${r.status}</p>
+                <ul>
+                    ${r.itens.map(i => `<li>${i.code} - Qtd: ${i.quantidade}</li>`).join("")}
+                </ul>
+                <small>${new Date(r.data).toLocaleString()}</small>
+            `;
+            list.appendChild(div);
         });
     }
 }
 
-// ===================== Inicialização =====================
-document.addEventListener('DOMContentLoaded', () => {
-    const inventorySystem = new InventorySystem();
-    window.inventorySystem = inventorySystem; // só para depuração no console
-});
+// ====================
+// Controle das abas
+// ====================
+function setupTabs() {
+    const buttons = document.querySelectorAll(".tab-btn");
+    const contents = document.querySelectorAll(".tab-content");
+
+    buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            buttons.forEach(b => b.classList.remove("active"));
+            contents.forEach(c => c.classList.remove("active"));
+
+            btn.classList.add("active");
+            document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+        });
+    });
+}
+
+// ====================
+// Inicialização
+// ====================
+const inventorySystem = new InventorySystem();
+const requisitionSystem = new RequisitionSystem(inventorySystem);
+setupTabs();
+
