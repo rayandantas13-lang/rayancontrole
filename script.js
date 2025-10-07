@@ -26,6 +26,10 @@ class InventorySystem {
         this.currentEditingId = null;
         this.filteredProducts = [];
         this.productToDelete = null;
+        this.requisitions = [];
+        this.selectedProductsForRequisition = [];
+        this.currentTab = 'products';
+        this.requisitionCounter = 1;
 
         this.init();
     }
@@ -33,6 +37,7 @@ class InventorySystem {
     init() {
         this.bindEvents();
         this.loadFromFirestore();
+        this.loadRequisitionsFromFirestore();
     }
 
     // ===================== Firestore =====================
@@ -47,6 +52,19 @@ class InventorySystem {
             });
         } catch (error) {
             console.error("Erro ao carregar produtos do Firestore:", error);
+        }
+    }
+
+    async loadRequisitionsFromFirestore() {
+        try {
+            const colRef = collection(db, "requisitions");
+            onSnapshot(colRef, (snapshot) => {
+                this.requisitions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.renderRequisitions();
+                this.updateDashboard();
+            });
+        } catch (error) {
+            console.error("Erro ao carregar requisições do Firestore:", error);
         }
     }
 
@@ -102,6 +120,17 @@ class InventorySystem {
         } catch (error) {
             console.error("Erro ao excluir produto:", error);
             alert("Erro ao excluir do servidor.");
+            return false;
+        }
+    }
+
+    async addRequisition(requisitionData) {
+        try {
+            await addDoc(collection(db, "requisitions"), requisitionData);
+            return true;
+        } catch (error) {
+            console.error("Erro ao adicionar requisição:", error);
+            alert("Erro ao salvar requisição no servidor.");
             return false;
         }
     }
@@ -204,6 +233,262 @@ class InventorySystem {
         totalItems.textContent = `Total de itens: ${this.products.length} (${totalQuantity} unidades)`;
     }
 
+    // ===================== Gerenciamento de Abas =====================
+    switchTab(tabName) {
+        // Remove active de todas as abas
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
+        // Ativa a aba selecionada
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // Atualiza conteúdo específico da aba
+        if (tabName === 'requisition') {
+            this.renderRequisitions();
+        } else if (tabName === 'dashboard') {
+            this.updateDashboard();
+        }
+    }
+
+    // ===================== Gerenciamento de Requisições =====================
+    generateRequisitionNumber(local, description) {
+        const localCode = local.substring(0, 3).toUpperCase();
+        const descCode = description.substring(0, 3).toUpperCase();
+        const number = this.requisitionCounter.toString().padStart(3, '0');
+        this.requisitionCounter++;
+        return `${localCode}${descCode}${number}`;
+    }
+
+    renderRequisitions() {
+        const requisitionsList = document.getElementById("requisitionsList");
+        if (this.requisitions.length === 0) {
+            requisitionsList.innerHTML = '<p>Nenhuma requisição realizada ainda.</p>';
+            return;
+        }
+
+        requisitionsList.innerHTML = this.requisitions.map(req => this.createRequisitionHTML(req)).join('');
+    }
+
+    createRequisitionHTML(req) {
+        const formattedDate = new Date(req.createdAt).toLocaleDateString("pt-BR");
+        const statusClass = `status-${req.status || 'pending'}`;
+        const statusText = req.status === 'approved' ? 'Aprovada' : req.status === 'rejected' ? 'Rejeitada' : 'Pendente';
+        
+        return `
+        <div class="requisition-item" data-id="${req.id}">
+            <div class="requisition-header">
+                <div class="requisition-info">
+                    <h3>${this.escapeHtml(req.description)}</h3>
+                    <div class="requisition-number">Nº ${req.number}</div>
+                </div>
+                <div class="requisition-status ${statusClass}">${statusText}</div>
+            </div>
+            <div class="requisition-details">
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Local</div>
+                    <div class="requisition-detail-value">${this.escapeHtml(req.local)}</div>
+                </div>
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Data</div>
+                    <div class="requisition-detail-value">${formattedDate}</div>
+                </div>
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Total de Itens</div>
+                    <div class="requisition-detail-value">${req.products.length}</div>
+                </div>
+            </div>
+            <div class="requisition-products">
+                <h4>Produtos Requisitados:</h4>
+                <div class="requisition-products-list">
+                    ${req.products.map(p => `
+                        <div class="requisition-product-item">
+                            <span class="requisition-product-name">${this.escapeHtml(p.name)}</span>
+                            <span class="requisition-product-quantity">${p.quantity}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    openRequisitionModal() {
+        this.selectedProductsForRequisition = [];
+        this.clearRequisitionForm();
+        this.openModal("requisitionModal");
+    }
+
+    clearRequisitionForm() {
+        document.getElementById("requisitionForm").reset();
+        this.renderSelectedProducts();
+    }
+
+    renderSelectedProducts() {
+        const selectedProducts = document.getElementById("selectedProducts");
+        if (this.selectedProductsForRequisition.length === 0) {
+            selectedProducts.innerHTML = '<p>Nenhum produto selecionado</p>';
+            selectedProducts.classList.remove('has-products');
+            return;
+        }
+
+        selectedProducts.classList.add('has-products');
+        selectedProducts.innerHTML = this.selectedProductsForRequisition.map(p => `
+            <div class="selected-product-item" data-id="${p.id}">
+                <div class="selected-product-info">
+                    <div class="selected-product-name">${this.escapeHtml(p.name)}</div>
+                    <div class="selected-product-code">Código: ${this.escapeHtml(p.code)}</div>
+                </div>
+                <div class="selected-product-quantity">
+                    <input type="number" class="quantity-input" value="${p.requestedQuantity}" min="1" max="${p.quantity}" 
+                           onchange="window.inventorySystem.updateSelectedProductQuantity('${p.id}', this.value)">
+                    <button type="button" class="remove-product-btn" onclick="window.inventorySystem.removeSelectedProduct('${p.id}')">Remover</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    updateSelectedProductQuantity(productId, quantity) {
+        const product = this.selectedProductsForRequisition.find(p => p.id === productId);
+        if (product) {
+            product.requestedQuantity = parseInt(quantity);
+        }
+    }
+
+    removeSelectedProduct(productId) {
+        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
+        this.renderSelectedProducts();
+    }
+
+    openProductSelectionModal() {
+        this.renderAvailableProducts();
+        this.openModal("productSelectionModal");
+    }
+
+    renderAvailableProducts() {
+        const availableProductsList = document.getElementById("availableProductsList");
+        if (this.products.length === 0) {
+            availableProductsList.innerHTML = '<p>Nenhum produto disponível no estoque.</p>';
+            return;
+        }
+
+        availableProductsList.innerHTML = this.products.map(p => {
+            const isSelected = this.selectedProductsForRequisition.some(sp => sp.id === p.id);
+            return `
+            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-id="${p.id}">
+                <div class="available-product-info">
+                    <div class="available-product-name">${this.escapeHtml(p.name)}</div>
+                    <div class="available-product-details">Código: ${this.escapeHtml(p.code)} | Estoque: ${p.quantity} | Local: ${this.escapeHtml(p.location)}</div>
+                </div>
+                <input type="checkbox" class="product-checkbox" ${isSelected ? 'checked' : ''} 
+                       onchange="window.inventorySystem.toggleProductSelection('${p.id}', this.checked)">
+            </div>
+            `;
+        }).join('');
+    }
+
+    toggleProductSelection(productId, isSelected) {
+        const product = this.products.find(p => p.id === productId);
+        if (!product) return;
+
+        if (isSelected) {
+            if (!this.selectedProductsForRequisition.some(p => p.id === productId)) {
+                this.selectedProductsForRequisition.push({
+                    ...product,
+                    requestedQuantity: 1
+                });
+            }
+        } else {
+            this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
+        }
+
+        // Atualiza a visualização
+        const item = document.querySelector(`[data-id="${productId}"]`);
+        if (item) {
+            item.classList.toggle('selected', isSelected);
+        }
+    }
+
+    confirmProductSelection() {
+        this.renderSelectedProducts();
+        this.closeModal("productSelectionModal");
+    }
+
+    async saveRequisition() {
+        const local = document.getElementById("requisitionLocal").value.trim();
+        const description = document.getElementById("requisitionDescription").value.trim();
+
+        if (!local || !description) {
+            alert("Por favor, preencha todos os campos obrigatórios.");
+            return;
+        }
+
+        if (this.selectedProductsForRequisition.length === 0) {
+            alert("Por favor, selecione pelo menos um produto.");
+            return;
+        }
+
+        const requisitionData = {
+            number: this.generateRequisitionNumber(local, description),
+            local: local,
+            description: description,
+            products: this.selectedProductsForRequisition.map(p => ({
+                id: p.id,
+                name: p.name,
+                code: p.code,
+                quantity: p.requestedQuantity
+            })),
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        const success = await this.addRequisition(requisitionData);
+        if (success) {
+            this.closeModal("requisitionModal");
+            this.switchTab('requisition');
+            alert("Requisição gerada com sucesso!");
+        }
+    }
+
+    // ===================== Dashboard =====================
+    updateDashboard() {
+        const dashboardSection = document.querySelector('.dashboard-section');
+        if (!dashboardSection) return;
+
+        const totalProducts = this.products.length;
+        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
+        const totalRequisitions = this.requisitions.length;
+        const lowStockProducts = this.products.filter(p => p.quantity < 10).length;
+
+        dashboardSection.innerHTML = `
+            <h2>Dashboard de Estoque</h2>
+            <div class="dashboard-stats">
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">Total de Produtos</div>
+                    <div class="dashboard-card-value">${totalProducts}</div>
+                    <div class="dashboard-card-subtitle">Itens cadastrados</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">Quantidade Total</div>
+                    <div class="dashboard-card-value">${totalQuantity}</div>
+                    <div class="dashboard-card-subtitle">Unidades em estoque</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">Requisições</div>
+                    <div class="dashboard-card-value">${totalRequisitions}</div>
+                    <div class="dashboard-card-subtitle">Total realizadas</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-card-title">Estoque Baixo</div>
+                    <div class="dashboard-card-value">${lowStockProducts}</div>
+                    <div class="dashboard-card-subtitle">Produtos com menos de 10 unidades</div>
+                </div>
+            </div>
+        `;
+    }
+
     // ===================== Modais e formulários =====================
     openModal(id) {
         document.getElementById(id).classList.add("active");
@@ -257,6 +542,12 @@ class InventorySystem {
 
     // ===================== Eventos =====================
     bindEvents() {
+        // Eventos das abas
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+        });
+
+        // Eventos dos produtos
         document.getElementById("addItemBtn").addEventListener("click", () => this.addNewProduct());
         document.getElementById("searchInput").addEventListener("input", e => this.searchProducts(e.target.value));
         document.getElementById("clearSearch").addEventListener("click", () => this.clearSearch());
@@ -265,6 +556,18 @@ class InventorySystem {
         document.getElementById("productForm").addEventListener("submit", e => { e.preventDefault(); this.saveProduct(); });
         document.getElementById("cancelDelete").addEventListener("click", () => this.closeModal("confirmModal"));
         document.getElementById("confirmDelete").addEventListener("click", () => this.executeDelete());
+
+        // Eventos das requisições
+        document.getElementById("generateRequisitionBtn").addEventListener("click", () => this.openRequisitionModal());
+        document.getElementById("closeRequisitionModal").addEventListener("click", () => this.closeModal("requisitionModal"));
+        document.getElementById("cancelRequisitionBtn").addEventListener("click", () => this.closeModal("requisitionModal"));
+        document.getElementById("requisitionForm").addEventListener("submit", e => { e.preventDefault(); this.saveRequisition(); });
+        document.getElementById("selectProductsBtn").addEventListener("click", () => this.openProductSelectionModal());
+        document.getElementById("closeProductSelectionModal").addEventListener("click", () => this.closeModal("productSelectionModal"));
+        document.getElementById("cancelProductSelectionBtn").addEventListener("click", () => this.closeModal("productSelectionModal"));
+        document.getElementById("confirmProductSelectionBtn").addEventListener("click", () => this.confirmProductSelection());
+
+        // Eventos gerais dos modais
         document.getElementById("modalOverlay").addEventListener("click", () => {
             const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id);
         });
@@ -279,6 +582,18 @@ class InventorySystem {
             if (e.target.matches("[data-action='delete']")) {
                 this.confirmDelete(e.target.dataset.id);
             }
+        });
+
+        // Evento de busca de produtos no modal de seleção
+        document.getElementById("productSearchInput").addEventListener("input", e => {
+            const query = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.available-product-item');
+            items.forEach(item => {
+                const name = item.querySelector('.available-product-name').textContent.toLowerCase();
+                const details = item.querySelector('.available-product-details').textContent.toLowerCase();
+                const matches = name.includes(query) || details.includes(query);
+                item.style.display = matches ? 'flex' : 'none';
+            });
         });
     }
 }
