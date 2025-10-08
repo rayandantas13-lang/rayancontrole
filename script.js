@@ -1,17 +1,23 @@
-// Configuração do Firebase (substitua pelas suas credenciais reais)
+// Importar módulos do Firebase v9
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+
+// Suas credenciais do Firebase (versão 9)
 const firebaseConfig = {
-    apiKey: "AIzaSyBOJJGZHKNqHGOOGJJGZHKNqHGOOGJJGZHKNqHGOO", // Substitua pela sua API Key
-    authDomain: "almoxarifado-sistema.firebaseapp.com",
-    projectId: "almoxarifado-sistema",
-    storageBucket: "almoxarifado-sistema.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef123456789012345678"
+  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
+  authDomain: "almoxarifado-348d5.firebaseapp.com",
+  projectId: "almoxarifado-348d5",
+  storageBucket: "almoxarifado-348d5.firebasestorage.app",
+  messagingSenderId: "295782162128",
+  appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
+  measurementId: "G-PC0FREL2DF"
 };
 
 // Inicializar Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 class InventorySystem {
     constructor() {
@@ -37,19 +43,19 @@ class InventorySystem {
     // ===================== Authentication and Authorization =====================
     async setupAuthListener() {
         return new Promise((resolve) => {
-            auth.onAuthStateChanged(async (user) => {
+            onAuthStateChanged(auth, async (user) => {
                 this.currentUser = user;
                 if (user) {
                     // Carregar o papel do usuário do Firestore
-                    const userDocRef = db.collection("users").doc(user.uid);
-                    const userDoc = await userDocRef.get();
-                    if (userDoc.exists) {
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    if (userDoc.exists()) {
                         this.userRole = userDoc.data().role;
                     } else {
                         // Se o usuário existe no Auth mas não no Firestore, pode ser um novo registro
                         // ou um usuário com papel padrão (normal)
                         this.userRole = 'normal';
-                        await userDocRef.set({ email: user.email, role: this.userRole });
+                        await setDoc(userDocRef, { email: user.email, role: this.userRole });
                     }
                     console.log("Usuário logado:", user.email, "Papel:", this.userRole);
                     document.getElementById("loginPage").style.display = "none";
@@ -76,7 +82,7 @@ class InventorySystem {
 
     async login(email, password) {
         try {
-            await auth.signInWithEmailAndPassword(email, password);
+            await signInWithEmailAndPassword(auth, email, password);
             alert("Login realizado com sucesso!");
         } catch (error) {
             console.error("Erro no login:", error);
@@ -86,7 +92,7 @@ class InventorySystem {
 
     async logout() {
         try {
-            await auth.signOut();
+            await signOut(auth);
             alert("Logout realizado com sucesso!");
         } catch (error) {
             console.error("Erro no logout:", error);
@@ -144,8 +150,9 @@ class InventorySystem {
     // ===================== Firestore Operations =====================
     async loadFromFirestore() {
         try {
-            const productsCol = await db.collection("products").get();
-            this.products = productsCol.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const productsCol = collection(db, "products");
+            const productSnapshot = await getDocs(productsCol);
+            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             console.log("Dados carregados do Firestore:", this.products.length, "produtos");
         } catch (error) {
             console.error("Erro ao carregar dados do Firestore:", error);
@@ -154,8 +161,9 @@ class InventorySystem {
 
     async loadRequisitionsFromFirestore() {
         try {
-            const requisitionsCol = await db.collection("requisitions").get();
-            this.requisitions = requisitionsCol.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const requisitionsCol = collection(db, "requisitions");
+            const requisitionSnapshot = await getDocs(requisitionsCol);
+            this.requisitions = requisitionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             console.log("Requisições carregadas do Firestore:", this.requisitions.length, "requisições");
         } catch (error) {
             console.error("Erro ao carregar requisições do Firestore:", error);
@@ -164,7 +172,7 @@ class InventorySystem {
 
     async saveToFirestore(product) {
         try {
-            await db.collection("products").doc(product.id).set(product);
+            await setDoc(doc(db, "products", product.id), product);
             console.log("Produto salvo no Firestore:", product.id);
             return true;
         } catch (error) {
@@ -175,7 +183,7 @@ class InventorySystem {
 
     async deleteFromFirestore(productId) {
         try {
-            await db.collection("products").doc(productId).delete();
+            await deleteDoc(doc(db, "products", productId));
             console.log("Produto deletado do Firestore:", productId);
             return true;
         } catch (error) {
@@ -186,7 +194,7 @@ class InventorySystem {
 
     async saveRequisitionToFirestore(requisition) {
         try {
-            await db.collection("requisitions").doc(requisition.id).set(requisition);
+            await setDoc(doc(db, "requisitions", requisition.id), requisition);
             console.log("Requisição salva no Firestore:", requisition.id);
             return true;
         } catch (error) {
@@ -197,8 +205,8 @@ class InventorySystem {
 
     async updateProductQuantityInFirestore(productId, newQuantity) {
         try {
-            const productRef = db.collection("products").doc(productId);
-            await productRef.update({ quantity: newQuantity });
+            const productRef = doc(db, "products", productId);
+            await update(productRef, { quantity: newQuantity });
             console.log(`Quantidade do produto ${productId} atualizada para ${newQuantity}`);
             return true;
         } catch (error) {
@@ -209,7 +217,7 @@ class InventorySystem {
 
     async saveUserToFirestore(uid, email, role) {
         try {
-            await db.collection("users").doc(uid).set({ email, role });
+            await setDoc(doc(db, "users", uid), { email, role });
             console.log("Usuário salvo no Firestore:", uid);
             return true;
         } catch (error) {
@@ -220,7 +228,7 @@ class InventorySystem {
 
     async deleteUserFromFirestore(uid) {
         try {
-            await db.collection("users").doc(uid).delete();
+            await deleteDoc(doc(db, "users", uid));
             console.log("Usuário deletado do Firestore:", uid);
             return true;
         } catch (error) {
@@ -690,8 +698,9 @@ class InventorySystem {
         userListDiv.innerHTML = '';
 
         try {
-            const usersCol = await db.collection("users").get();
-            const users = usersCol.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+            const usersCol = collection(db, "users");
+            const userSnapshot = await getDocs(usersCol);
+            const users = userSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
 
             if (users.length === 0) {
                 userListDiv.innerHTML = '<p class="empty-state">Nenhum usuário cadastrado.</p>';
@@ -744,9 +753,9 @@ class InventorySystem {
             alert("Você não tem permissão para editar usuários.");
             return;
         }
-        const userDocRef = db.collection("users").doc(uid);
-        const userDoc = await userDocRef.get();
-        if (userDoc.exists) {
+        const userDocRef = doc(db, "users", uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
             const userData = userDoc.data();
             document.getElementById('userModalTitle').textContent = 'Editar Usuário';
             // document.getElementById('userName').value = userData.email; // Usar email como nome para exibição
@@ -798,7 +807,7 @@ class InventorySystem {
                 return;
             }
             try {
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 await this.saveUserToFirestore(userCredential.user.uid, email, role);
                 alert("Usuário adicionado com sucesso!");
             } catch (error) {
