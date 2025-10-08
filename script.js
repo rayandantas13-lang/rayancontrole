@@ -8,7 +8,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
   projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.firebasestorage.app", // ou .appspot.com, o que estiver no console
+  storageBucket: "almoxarifado-348d5.firebasestorage.app",
   messagingSenderId: "295782162128",
   appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
   measurementId: "G-PC0FREL2DF"
@@ -23,40 +23,56 @@ class InventorySystem {
     constructor() {
         this.products = [];
         this.requisitions = [];
+        this.selectedProductsForRequisition = [];
+        this.currentTab = 'products';
+        this.nextRequisitionNumber = 1;
         this.currentUser = null;
-        this.userRole = 'guest'; // Papeis: guest, normal, subadm, admin
+        this.userRole = 'guest'; // guest, normal, subadm, admin
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
-        await this.setupAuthListener();
+        await this.setupAuthListener(); // Configura o listener de autenticação primeiro
     }
 
-    // ===================== Autenticação e Autorização =====================
+    // ===================== Authentication and Authorization =====================
     async setupAuthListener() {
-        onAuthStateChanged(auth, async (user) => {
-            this.currentUser = user;
-            if (user) {
-                const userDocRef = doc(db, "users", user.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    this.userRole = userDoc.data().role;
+        return new Promise((resolve) => {
+            onAuthStateChanged(auth, async (user) => {
+                this.currentUser = user;
+                if (user) {
+                    // Carregar o papel do usuário do Firestore
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    if (userDoc.exists()) {
+                        this.userRole = userDoc.data().role;
+                    } else {
+                        // Se o usuário existe no Auth mas não no Firestore, pode ser um novo registro
+                        // ou um usuário com papel padrão (normal)
+                        this.userRole = 'normal';
+                        await setDoc(userDocRef, { email: user.email, role: this.userRole });
+                    }
+                    console.log("Usuário logado:", user.email, "Papel:", this.userRole);
+                    document.getElementById("loginPage").style.display = "none";
+                    document.getElementById("mainApp").style.display = "block";
+                    await this.loadFromFirestore(); // Carregar dados após login
+                    await this.loadRequisitionsFromFirestore();
                 } else {
-                    this.userRole = 'normal'; // Papel padrão para novos usuários
-                    await setDoc(userDocRef, { email: user.email, role: this.userRole });
+                    this.userRole = 'guest';
+                    console.log("Usuário deslogado.");
+                    document.getElementById("loginPage").style.display = "flex";
+                    document.getElementById("mainApp").style.display = "none";
+                    this.products = []; // Limpar dados se deslogado
+                    this.requisitions = [];
                 }
-                document.getElementById("loginPage").style.display = "none";
-                document.getElementById("mainApp").style.display = "block";
-                await this.loadAllData();
-            } else {
-                this.userRole = 'guest';
-                document.getElementById("loginPage").style.display = "flex";
-                document.getElementById("mainApp").style.display = "none";
-                this.clearData();
-            }
-            this.applyPermissions();
-            this.renderAll();
+                this.applyPermissions();
+                this.render();
+                this.updateStats();
+                this.updateDashboard();
+                this.populateLocationFilter();
+                resolve();
+            });
         });
     }
 
@@ -65,107 +81,325 @@ class InventorySystem {
             await signInWithEmailAndPassword(auth, email, password);
             alert("Login realizado com sucesso!");
         } catch (error) {
+            console.error("Erro no login:", error);
             alert("Erro no login: " + error.message);
         }
     }
 
     async logout() {
-        await signOut(auth);
-        alert("Logout realizado!");
+        try {
+            await signOut(auth);
+            alert("Logout realizado com sucesso!");
+        } catch (error) {
+            console.error("Erro no logout:", error);
+            alert("Erro no logout: " + error.message);
+        }
     }
 
     applyPermissions() {
         const isAdmin = this.userRole === 'admin';
         const isSubAdm = this.userRole === 'subadm';
-        
-        // Botões de adicionar (visíveis para admin e subadm)
-        document.getElementById('addItemBtn').style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
+        const isNormalUser = this.userRole === 'normal';
+
+        // Gerenciamento de Usuários (apenas ADM)
+        document.getElementById('userManagementTabBtn').style.display = isAdmin ? 'block' : 'none';
         document.getElementById('addUserBtn').style.display = isAdmin ? 'block' : 'none';
 
-        // Aba de gerenciamento de usuários (visível apenas para admin)
-        document.getElementById('userManagementTabBtn').style.display = isAdmin ? 'block' : 'none';
+        // Adicionar Item (ADM e SubAdm)
+        document.getElementById('addItemBtn').style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
 
-        // Re-renderiza tudo para aplicar permissões nos itens (botões de editar/excluir)
-        this.renderAll();
-    }
+        // Gerar Nova Requisição (Todos, mas com campos específicos para cada um)
+        document.getElementById('generateRequisitionBtn').style.display = (isAdmin || isSubAdm || isNormalUser) ? 'block' : 'none';
 
-    // ===================== Operações com Firestore =====================
-    async loadAllData() {
-        await this.loadProductsFromFirestore();
-        await this.loadRequisitionsFromFirestore();
-        if (this.userRole === 'admin') {
-            await this.renderUsers();
+        // Campos de requisição (descrição vs quantidade estimada)
+        const requisitionDescriptionLabel = document.querySelector('#requisitionModal label[for="requisitionDescription"]');
+        const requisitionDescriptionInput = document.getElementById('requisitionDescription');
+        const estimatedQuantityLabel = document.querySelector('#requisitionModal label[for="estimatedQuantity"]');
+        const estimatedQuantityInput = document.getElementById('estimatedQuantity');
+
+        if (isNormalUser) {
+            if (requisitionDescriptionLabel) requisitionDescriptionLabel.textContent = 'Descrição (Opcional)';
+            if (requisitionDescriptionInput) requisitionDescriptionInput.removeAttribute('required');
+            if (estimatedQuantityLabel) estimatedQuantityLabel.style.display = 'block';
+            if (estimatedQuantityInput) estimatedQuantityInput.style.display = 'block';
+            if (estimatedQuantityInput) estimatedQuantityInput.setAttribute('required', 'true');
+        } else {
+            if (requisitionDescriptionLabel) requisitionDescriptionLabel.textContent = 'Descrição *';
+            if (requisitionDescriptionInput) requisitionDescriptionInput.setAttribute('required', 'true');
+            if (estimatedQuantityLabel) estimatedQuantityLabel.style.display = 'none';
+            if (estimatedQuantityInput) estimatedQuantityInput.style.display = 'none';
+            if (estimatedQuantityInput) estimatedQuantityInput.removeAttribute('required');
         }
+
+        // Atualizar renderização para aplicar permissões nos itens da lista
+        this.render();
+        this.renderRequisitions();
+        this.renderUsers();
     }
 
-    async loadProductsFromFirestore() {
-        const productsCol = collection(db, "products");
-        const snapshot = await getDocs(productsCol);
-        this.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // ===================== Firestore Operations =====================
+    async loadFromFirestore() {
+        try {
+            const productsCol = collection(db, "products");
+            const productSnapshot = await getDocs(productsCol);
+            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Produtos carregados do Firestore:", this.products.length, "produtos.", this.products);
+            if (this.products.length === 0) {
+                console.warn("Nenhum produto encontrado no Firestore. Verifique sua coleção 'products'.");
+            }
+        } catch (error) {
+            console.error("Erro ao carregar dados do Firestore:", error);
+        }
     }
 
     async loadRequisitionsFromFirestore() {
-        const requisitionsCol = collection(db, "requisitions");
-        const snapshot = await getDocs(requisitionsCol);
-        this.requisitions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    async saveData(collectionName, id, data) {
-        await setDoc(doc(db, collectionName, id), data);
-    }
-
-    async deleteData(collectionName, id) {
-        await deleteDoc(doc(db, collectionName, id));
-    }
-    
-    async updateProductQuantity(productId, newQuantity) {
-        const productRef = doc(db, "products", productId);
-        await updateDoc(productRef, { quantity: newQuantity });
-    }
-
-    // ===================== Gerenciamento de Produtos =====================
-    async handleProductForm(event) {
-        event.preventDefault();
-        const form = event.target;
-        const productId = form.productId.value;
-        const productData = {
-            name: form.productName.value,
-            code: form.productCode.value,
-            quantity: Number(form.productQuantity.value),
-            local: form.productLocal.value,
-            description: form.productDescription.value,
-            lastUpdated: new Date().toLocaleDateString("pt-BR")
-        };
-
-        const id = productId || productData.code;
-        await this.saveData("products", id, productData);
-        
-        this.closeProductModal();
-        await this.loadProductsFromFirestore();
-        this.renderAll();
-        alert(`Produto ${productId ? 'atualizado' : 'adicionado'} com sucesso!`);
-    }
-
-    async deleteProduct(productId) {
-        if (confirm("Tem certeza que deseja excluir este produto?")) {
-            await this.deleteData("products", productId);
-            await this.loadProductsFromFirestore();
-            this.renderAll();
-            alert("Produto excluído com sucesso!");
+        try {
+            const requisitionsCol = collection(db, "requisitions");
+            const requisitionSnapshot = await getDocs(requisitionsCol);
+            this.requisitions = requisitionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Requisições carregadas do Firestore:", this.requisitions.length, "requisições");
+        } catch (error) {
+            console.error("Erro ao carregar requisições do Firestore:", error);
         }
     }
 
-    // ===================== Gerenciamento de Requisições =====================
-    async handleRequisitionForm(event) {
+    async saveToFirestore(product) {
+        try {
+            await setDoc(doc(db, "products", product.id), product);
+            console.log("Produto salvo no Firestore:", product.id);
+            return true;
+        } catch (error) {
+            console.error("Erro ao salvar no Firestore:", error);
+            return false;
+        }
+    }
+
+    async deleteFromFirestore(productId) {
+        try {
+            await deleteDoc(doc(db, "products", productId));
+            console.log("Produto deletado do Firestore:", productId);
+            return true;
+        } catch (error) {
+            console.error("Erro ao deletar do Firestore:", error);
+            return false;
+        }
+    }
+
+    async saveRequisitionToFirestore(requisition) {
+        try {
+            await setDoc(doc(db, "requisitions", requisition.id), requisition);
+            console.log("Requisição salva no Firestore:", requisition.id);
+            return true;
+        } catch (error) {
+            console.error("Erro ao salvar requisição no Firestore:", error);
+            return false;
+        }
+    }
+
+    async updateProductQuantityInFirestore(productId, newQuantity) {
+        try {
+            const productRef = doc(db, "products", productId);
+            await updateDoc(productRef, { quantity: newQuantity });
+            console.log(`Quantidade do produto ${productId} atualizada para ${newQuantity}`);
+            return true;
+        } catch (error) {
+            console.error("Erro ao atualizar quantidade do produto no Firestore:", error);
+            return false;
+        }
+    }
+
+    async saveUserToFirestore(uid, email, role) {
+        try {
+            await setDoc(doc(db, "users", uid), { email, role });
+            console.log("Usuário salvo no Firestore:", uid);
+            return true;
+        } catch (error) {
+            console.error("Erro ao salvar usuário no Firestore:", error);
+            return false;
+        }
+    }
+
+    async deleteUserFromFirestore(uid) {
+        try {
+            await deleteDoc(doc(db, "users", uid));
+            console.log("Usuário deletado do Firestore:", uid);
+            return true;
+        } catch (error) {
+            console.error("Erro ao deletar usuário do Firestore:", error);
+            return false;
+        }
+    }
+
+    // ===================== Tab Management =====================
+    switchTab(tabName) {
+        if (!this.currentUser) {
+            alert("Por favor, faça login para acessar o sistema.");
+            return;
+        }
+
+        console.log("Aba atual:", tabName);
+        
+        // Atualizar botões das abas
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Atualizar conteúdo das abas
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // Renderizar conteúdo específico da aba
+        if (tabName === 'products') {
+            this.render();
+        } else if (tabName === 'requisition') {
+            this.renderRequisitions();
+        } else if (tabName === 'dashboard') {
+            this.updateDashboard();
+        } else if (tabName === 'userManagement') {
+            this.renderUsers();
+        }
+    }
+
+    // ===================== Product Management =====================
+    addProduct(productData) {
+        const product = {
+            id: productData.code, // Usar o código como ID para simplificar
+            name: productData.name,
+            code: productData.code,
+            quantity: parseFloat(productData.quantity),
+            local: productData.local,
+            description: productData.description || '',
+            lastUpdated: new Date().toLocaleDateString("pt-BR")
+        };
+
+        this.products.push(product);
+        this.saveToFirestore(product);
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
+    }
+
+    editProduct(productId, productData) {
+        const index = this.products.findIndex(p => p.id === productId);
+        if (index !== -1) {
+            this.products[index] = {
+                ...this.products[index],
+                name: productData.name,
+                code: productData.code,
+                quantity: parseFloat(productData.quantity),
+                local: productData.local,
+                description: productData.description || '',
+                lastUpdated: new Date().toLocaleDateString("pt-BR")
+            };
+            this.saveToFirestore(this.products[index]);
+            this.render();
+            this.updateStats();
+            this.updateDashboard();
+            this.populateLocationFilter();
+        }
+    }
+
+    deleteProduct(productId) {
+        this.products = this.products.filter(p => p.id !== productId);
+        this.deleteFromFirestore(productId);
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
+    }
+
+    render() {
+        const productsList = document.getElementById("productsList");
+        const emptyState = document.getElementById("emptyState");
+        const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+
+        const filteredProducts = this.products.filter(product =>
+            (product.name ?? '').toLowerCase().includes(searchTerm) ||
+            (product.code ?? '').toLowerCase().includes(searchTerm) ||
+            (product.local ?? '').toLowerCase().includes(searchTerm)
+        );
+
+        if (filteredProducts.length === 0) {
+            emptyState.style.display = "block";
+            productsList.innerHTML = "";
+        } else {
+            emptyState.style.display = "none";
+            productsList.innerHTML = filteredProducts.map(product => this.createProductHTML(product)).join('');
+        }
+    }
+
+    createProductHTML(product) {
+        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
+        const quantity = product.quantity ?? 0;
+        const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
+        
+        return `
+        <div class="product-item" data-id="${product.id}">
+            <div class="product-header">
+                <div class="product-info">
+                    <h3>${this.escapeHtml(product.name)}</h3>
+                    <span class="product-code">Código: ${this.escapeHtml(product.code)}</span>
+                </div>
+                ${isAdmOrSubAdm ? `
+                <div class="product-actions">
+                    <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditProductModal('${product.id}')">Editar</button>
+                    <button type="button" class="btn-danger" onclick="window.inventorySystem.confirmDeleteProduct('${product.id}', '${this.escapeHtml(product.name)}')">Excluir</button>
+                </div>
+                ` : ''}
+            </div>
+            <div class="product-details">
+                <div class="product-detail">
+                    <div class="product-detail-label">Quantidade</div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${quantity}</span></div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Local</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.local)}</div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Última Atualização</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated)}</div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Descrição</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.description)}</div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ===================== Requisition Management =====================
+    openRequisitionModal() {
+        this.selectedProductsForRequisition = [];
+        const productSelectionList = document.getElementById('productSelectionList');
+        productSelectionList.innerHTML = this.products.map(product => `
+            <div class="product-selection-item">
+                <input type="checkbox" id="product-${product.id}" name="product" value="${product.id}">
+                <label for="product-${product.id}">${this.escapeHtml(product.name)} (Estoque: ${product.quantity})</label>
+            </div>
+        `).join('');
+        document.getElementById('requisitionModal').style.display = 'block';
+    }
+
+    closeRequisitionModal() {
+        document.getElementById('requisitionModal').style.display = 'none';
+    }
+
+    async generateRequisition(event) {
         event.preventDefault();
         const form = event.target;
-        const isNormalUser = this.userRole === 'normal';
-        
-        const selectedProducts = Array.from(form.querySelectorAll('input[name="product-checkbox"]:checked'))
-            .map(cb => this.products.find(p => p.id === cb.value));
+        const description = form.requisitionDescription.value;
+        const estimatedQuantity = form.estimatedQuantity.value;
+        const selectedProducts = Array.from(form.querySelectorAll('input[name="product"]:checked')).map(input => input.value);
 
         if (selectedProducts.length === 0) {
-            alert("Selecione ao menos um produto.");
+            alert("Por favor, selecione pelo menos um produto.");
             return;
         }
 
@@ -173,314 +407,302 @@ class InventorySystem {
             id: `REQ-${Date.now()}`,
             requester: this.currentUser.email,
             date: new Date().toLocaleDateString("pt-BR"),
-            status: 'Pendente',
-            description: form.requisitionDescription.value,
-            products: selectedProducts.map(p => ({
-                id: p.id,
-                name: p.name,
-                code: p.code,
-                // Para usuários normais, a quantidade vem do campo único; para outros, é 1 por item
-                quantity: isNormalUser ? Number(form.estimatedQuantity.value) : 1
-            })),
+            products: selectedProducts.map(productId => {
+                const product = this.products.find(p => p.id === productId);
+                return {
+                    id: product.id,
+                    name: product.name,
+                    code: product.code,
+                    quantity: estimatedQuantity ? parseInt(estimatedQuantity, 10) : 0 // Usar quantidade estimada se fornecida
+                };
+            }),
+            status: 'Pendente', // Pendente, Finalizado
+            description: description,
             totalItems: selectedProducts.length,
             finalizedQuantity: 0
         };
 
-        await this.saveData("requisitions", requisition.id, requisition);
+        await this.saveRequisitionToFirestore(requisition);
+        this.requisitions.push(requisition);
+        this.renderRequisitions();
         this.closeRequisitionModal();
-        await this.loadRequisitionsFromFirestore();
-        this.renderRequisitions();
         alert("Requisição gerada com sucesso!");
-    }
-    
-    async finalizeRequisition(requisitionId) {
-        const finalizedQuantityStr = prompt("Digite a quantidade real finalizada para esta requisição:");
-        if (finalizedQuantityStr === null) return; // Usuário cancelou
-
-        const finalizedQuantity = Number(finalizedQuantityStr);
-        if (isNaN(finalizedQuantity) || finalizedQuantity < 0) {
-            alert("Por favor, insira um número válido.");
-            return;
-        }
-
-        const requisition = this.requisitions.find(r => r.id === requisitionId);
-        if (!requisition) return;
-
-        // Atualiza o status e a quantidade finalizada da requisição
-        requisition.status = 'Finalizado';
-        requisition.finalizedQuantity = finalizedQuantity;
-        await this.saveData("requisitions", requisition.id, requisition);
-
-        // Atualiza o estoque dos produtos
-        for (const reqProduct of requisition.products) {
-            const product = this.products.find(p => p.id === reqProduct.id);
-            if (product) {
-                const newQuantity = product.quantity - finalizedQuantity;
-                await this.updateProductQuantity(product.id, newQuantity < 0 ? 0 : newQuantity);
-            }
-        }
-
-        await this.loadAllData();
-        this.renderAll();
-        alert("Requisição finalizada e estoque atualizado!");
-    }
-
-    // ===================== Gerenciamento de Usuários (Admin) =====================
-    async handleUserForm(event) {
-        event.preventDefault();
-        const form = event.target;
-        const email = form.userEmail.value;
-        const password = form.userPassword.value;
-        const role = form.userRole.value;
-
-        try {
-            // 1. Cria o usuário no Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            // 2. Salva o papel do usuário no Firestore
-            await this.saveData("users", userCredential.user.uid, { email, role });
-            
-            this.closeUserModal();
-            await this.renderUsers();
-            alert("Usuário adicionado com sucesso!");
-        } catch (error) {
-            alert("Erro ao adicionar usuário: " + error.message);
-        }
-    }
-
-    async deleteUser(userId, userEmail) {
-        if (confirm(`Tem certeza que deseja excluir o usuário ${userEmail}? Esta ação não pode ser desfeita.`)) {
-            // NOTA: A exclusão de um usuário do Firebase Auth é uma operação sensível
-            // e geralmente requer um ambiente de back-end (Cloud Functions) para ser feita de forma segura.
-            // Por simplicidade, aqui vamos apenas remover do Firestore.
-            await this.deleteData("users", userId);
-            await this.renderUsers();
-            alert("Usuário removido do Firestore!");
-        }
-    }
-
-    // ===================== Renderização e UI =====================
-    renderAll() {
-        this.renderProducts();
-        this.renderRequisitions();
-        this.updateStats();
-        if (this.userRole === 'admin') {
-            this.renderUsers();
-        }
-    }
-
-    renderProducts() {
-        const list = document.getElementById("productsList");
-        const empty = document.getElementById("emptyState");
-        const searchTerm = document.getElementById("searchInput").value.toLowerCase();
-        
-        const filtered = this.products.filter(p => 
-            p.name.toLowerCase().includes(searchTerm) || 
-            p.code.toLowerCase().includes(searchTerm) ||
-            p.local.toLowerCase().includes(searchTerm)
-        );
-
-        list.innerHTML = "";
-        if (filtered.length === 0) {
-            empty.style.display = "block";
-            return;
-        }
-        
-        empty.style.display = "none";
-        filtered.forEach(p => {
-            const item = document.createElement("div");
-            item.className = "product-item";
-            item.innerHTML = this.createProductHTML(p);
-            list.appendChild(item);
-        });
-    }
-
-    createProductHTML(product) {
-        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
-        const quantityClass = product.quantity < 100 ? 'quantity-low' : product.quantity < 500 ? 'quantity-medium' : 'quantity-high';
-        
-        return `
-            <div class="product-header">
-                <h3>${product.name}</h3>
-                ${isAdmOrSubAdm ? `
-                <div class="product-actions">
-                    <button class="btn-edit" onclick="window.inventorySystem.openEditProductModal('${product.id}')">Editar</button>
-                    <button class="btn-danger" onclick="window.inventorySystem.deleteProduct('${product.id}')">Excluir</button>
-                </div>` : ''}
-            </div>
-            <div class="product-details">
-                <p><strong>Código:</strong> ${product.code}</p>
-                <p><strong>Local:</strong> ${product.local}</p>
-                <p><strong>Quantidade:</strong> <span class="quantity-badge ${quantityClass}">${product.quantity}</span></p>
-            </div>
-            <p class="product-description">${product.description || 'Sem descrição.'}</p>
-        `;
     }
 
     renderRequisitions() {
-        const list = document.getElementById("requisitionsList");
-        const empty = document.getElementById("emptyRequisitionState");
-        list.innerHTML = "";
+        const requisitionsList = document.getElementById("requisitionsList");
+        const emptyRequisitionState = document.getElementById("emptyRequisitionState");
 
         if (this.requisitions.length === 0) {
-            empty.style.display = "block";
-            return;
+            emptyRequisitionState.style.display = "block";
+            requisitionsList.innerHTML = "";
+        } else {
+            emptyRequisitionState.style.display = "none";
+            requisitionsList.innerHTML = this.requisitions.map(requisition => this.createRequisitionHTML(requisition)).join('');
         }
-
-        empty.style.display = "none";
-        this.requisitions.forEach(r => {
-            const item = document.createElement("div");
-            item.className = "requisition-item";
-            item.innerHTML = this.createRequisitionHTML(r);
-            list.appendChild(item);
-        });
     }
 
     createRequisitionHTML(requisition) {
         const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         const statusClass = requisition.status === 'Pendente' ? 'status-pending' : 'status-finalized';
-        
+
         return `
+        <div class="requisition-item" data-id="${requisition.id}">
             <div class="requisition-header">
-                <h3>Requisição #${requisition.id.substring(4, 10)}</h3>
-                <span class="requisition-status ${statusClass}">${requisition.status}</span>
+                <div class="requisition-info">
+                    <h3>Requisição #${requisition.id}</h3>
+                    <span class="requisition-date">Data: ${requisition.date}</span>
+                </div>
+                <div class="requisition-status ${statusClass}">${requisition.status}</div>
             </div>
-            <p><strong>Solicitante:</strong> ${requisition.requester}</p>
-            <p><strong>Data:</strong> ${requisition.date}</p>
-            <p><strong>Descrição:</strong> ${requisition.description}</p>
-            <ul>
-                ${requisition.products.map(p => `<li>${p.name} (Qtd: ${p.quantity})</li>`).join('')}
-            </ul>
-            ${(isAdmOrSubAdm && requisition.status === 'Pendente') ? `
+            <div class="requisition-details">
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Solicitante</div>
+                    <div class="requisition-detail-value">${this.escapeHtml(requisition.requester)}</div>
+                </div>
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Total de Itens</div>
+                    <div class="requisition-detail-value">${requisition.totalItems}</div>
+                </div>
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Quantidade Finalizada</div>
+                    <div class="requisition-detail-value">${requisition.finalizedQuantity}</div>
+                </div>
+            </div>
+            <div class="requisition-products">
+                <h4>Produtos Requisitados:</h4>
+                <ul>
+                    ${requisition.products.map(product => `<li>${this.escapeHtml(product.name)} - Solicitado: ${product.quantity}</li>`).join('')}
+                </ul>
+            </div>
+            ${isAdmOrSubAdm && requisition.status === 'Pendente' ? `
             <div class="requisition-actions">
-                <button class="btn-primary" onclick="window.inventorySystem.finalizeRequisition('${requisition.id}')">Finalizar</button>
-            </div>` : ''}
-        `;
+                <input type="number" id="finalizedQuantity-${requisition.id}" placeholder="Qtd. Real Finalizada" min="0">
+                <button type="button" class="btn-primary" onclick="window.inventorySystem.finalizeRequisition('${requisition.id}')">Finalizar Requisição</button>
+            </div>
+            ` : ''}
+        </div>`;
+    }
+
+    async finalizeRequisition(requisitionId) {
+        const finalizedQuantityInput = document.getElementById(`finalizedQuantity-${requisitionId}`);
+        const finalizedQuantity = parseInt(finalizedQuantityInput.value, 10);
+
+        if (isNaN(finalizedQuantity) || finalizedQuantity < 0) {
+            alert("Por favor, insira uma quantidade finalizada válida.");
+            return;
+        }
+
+        const requisitionIndex = this.requisitions.findIndex(r => r.id === requisitionId);
+        if (requisitionIndex !== -1) {
+            const requisition = this.requisitions[requisitionIndex];
+            requisition.status = 'Finalizado';
+            requisition.finalizedQuantity = finalizedQuantity;
+
+            // Atualizar estoque
+            for (const reqProduct of requisition.products) {
+                const productIndex = this.products.findIndex(p => p.id === reqProduct.id);
+                if (productIndex !== -1) {
+                    const product = this.products[productIndex];
+                    const newQuantity = product.quantity - finalizedQuantity; // Subtrai a quantidade finalizada
+                    product.quantity = newQuantity < 0 ? 0 : newQuantity;
+                    await this.updateProductQuantityInFirestore(product.id, product.quantity);
+                }
+            }
+
+            await this.saveRequisitionToFirestore(requisition);
+            this.renderRequisitions();
+            this.render(); // Atualizar a lista de produtos
+            alert("Requisição finalizada com sucesso!");
+        }
+    }
+
+    // ===================== User Management =====================
+    async addUser(email, password, role) {
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+            await this.saveUserToFirestore(user.uid, email, role);
+            alert("Usuário adicionado com sucesso!");
+            this.renderUsers();
+        } catch (error) {
+            console.error("Erro ao adicionar usuário:", error);
+            alert("Erro ao adicionar usuário: " + error.message);
+        }
+    }
+
+    async deleteUser(uid) {
+        // Adicionar lógica para deletar usuário do Firebase Auth (requer ambiente de admin)
+        // Por enquanto, vamos apenas deletar do Firestore
+        await this.deleteUserFromFirestore(uid);
+        alert("Usuário deletado com sucesso!");
+        this.renderUsers();
     }
 
     async renderUsers() {
-        const list = document.getElementById("usersList");
-        list.innerHTML = "Carregando...";
-        
-        const usersCol = collection(db, "users");
-        const snapshot = await getDocs(usersCol);
-        const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        list.innerHTML = "";
-        users.forEach(user => {
-            const item = document.createElement("div");
-            item.className = "user-item";
-            item.innerHTML = `
-                <p>${user.email}</p>
-                <p><strong>${user.role.toUpperCase()}</strong></p>
-                <button class="btn-danger" onclick="window.inventorySystem.deleteUser('${user.id}', '${user.email}')">Excluir</button>
-            `;
-            list.appendChild(item);
-        });
+        const usersList = document.getElementById("usersList");
+        try {
+            const usersCol = collection(db, "users");
+            const userSnapshot = await getDocs(usersCol);
+            const users = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            usersList.innerHTML = users.map(user => this.createUserHTML(user)).join('');
+        } catch (error) {
+            console.error("Erro ao renderizar usuários:", error);
+        }
     }
 
-    updateStats() {
-        document.getElementById('totalProductsStat').textContent = this.products.length;
-        document.getElementById('totalStockStat').textContent = this.products.reduce((sum, p) => sum + p.quantity, 0);
-        document.getElementById('totalRequisitionsStat').textContent = this.requisitions.length;
+    createUserHTML(user) {
+        return `
+        <div class="user-item">
+            <span>${this.escapeHtml(user.email)}</span>
+            <span>${this.escapeHtml(user.role)}</span>
+            <button type="button" class="btn-danger" onclick="window.inventorySystem.deleteUser('${user.id}')">Excluir</button>
+        </div>`;
     }
 
-    clearData() {
-        this.products = [];
-        this.requisitions = [];
-        this.renderAll();
-    }
-
-    // ===================== Modais e Eventos =====================
+    // ===================== UI and Utilities =====================
     setupEventListeners() {
-        document.getElementById('loginForm').addEventListener('submit', (e) => this.login(e.target.email.value, e.target.password.value));
-        document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
-        document.getElementById('searchInput').addEventListener('input', () => this.renderProducts());
-        
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = e.target.email.value;
+            const password = e.target.password.value;
+            this.login(email, password);
         });
 
-        // Ações principais
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
+
+        // Tabs
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                this.switchTab(button.dataset.tab);
+            });
+        });
+
+        // Modals
         document.getElementById('addItemBtn').addEventListener('click', () => this.openAddProductModal());
         document.getElementById('generateRequisitionBtn').addEventListener('click', () => this.openRequisitionModal());
         document.getElementById('addUserBtn').addEventListener('click', () => this.openAddUserModal());
 
-        // Submissão de formulários
-        document.getElementById('productForm').addEventListener('submit', (e) => this.handleProductForm(e));
-        document.getElementById('requisitionForm').addEventListener('submit', (e) => this.handleRequisitionForm(e));
-        document.getElementById('userForm').addEventListener('submit', (e) => this.handleUserForm(e));
-    }
+        document.getElementById('productModal').querySelector('.close').addEventListener('click', () => this.closeProductModal());
+        document.getElementById('requisitionModal').querySelector('.close').addEventListener('click', () => this.closeRequisitionModal());
+        document.getElementById('userModal').querySelector('.close').addEventListener('click', () => this.closeUserModal());
 
-    switchTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-        document.getElementById(`${tabName}Tab`).classList.add('active');
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        // Forms
+        document.getElementById('productForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const productId = e.target.productId.value;
+            const productData = {
+                name: e.target.productName.value,
+                code: e.target.productCode.value,
+                quantity: e.target.productQuantity.value,
+                local: e.target.productLocal.value,
+                description: e.target.productDescription.value
+            };
+            if (productId) {
+                this.editProduct(productId, productData);
+            } else {
+                this.addProduct(productData);
+            }
+            this.closeProductModal();
+        });
+
+        document.getElementById('requisitionForm').addEventListener('submit', (e) => this.generateRequisition(e));
+
+        document.getElementById('userForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = e.target.userEmail.value;
+            const password = e.target.userPassword.value;
+            const role = e.target.userRole.value;
+            this.addUser(email, password, role);
+            this.closeUserModal();
+        });
+
+        // Search
+        document.getElementById('searchInput').addEventListener('input', () => this.render());
     }
 
     openAddProductModal() {
         document.getElementById('productForm').reset();
         document.getElementById('productId').value = '';
         document.getElementById('productModalTitle').textContent = 'Adicionar Novo Produto';
-        document.getElementById('productModal').style.display = 'flex';
+        document.getElementById('productModal').style.display = 'block';
     }
 
     openEditProductModal(productId) {
         const product = this.products.find(p => p.id === productId);
-        if (!product) return;
-
-        const form = document.getElementById('productForm');
-        form.reset();
-        form.productId.value = product.id;
-        form.productName.value = product.name;
-        form.productCode.value = product.code;
-        form.productQuantity.value = product.quantity;
-        form.productLocal.value = product.local;
-        form.productDescription.value = product.description;
-        
-        document.getElementById('productModalTitle').textContent = 'Editar Produto';
-        document.getElementById('productModal').style.display = 'flex';
+        if (product) {
+            document.getElementById('productId').value = product.id;
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productCode').value = product.code;
+            document.getElementById('productQuantity').value = product.quantity;
+            document.getElementById('productLocal').value = product.local;
+            document.getElementById('productDescription').value = product.description;
+            document.getElementById('productModalTitle').textContent = 'Editar Produto';
+            document.getElementById('productModal').style.display = 'block';
+        }
     }
 
     closeProductModal() {
         document.getElementById('productModal').style.display = 'none';
     }
 
-    openRequisitionModal() {
-        const list = document.getElementById('productSelectionList');
-        list.innerHTML = "";
-        this.products.forEach(p => {
-            list.innerHTML += `
-                <div class="checkbox-item">
-                    <input type="checkbox" id="prod-${p.id}" name="product-checkbox" value="${p.id}">
-                    <label for="prod-${p.id}">${p.name} (Estoque: ${p.quantity})</label>
-                </div>
-            `;
-        });
-
-        // Ajusta o formulário com base no papel do usuário
-        const isNormalUser = this.userRole === 'normal';
-        document.getElementById('estimatedQuantityGroup').style.display = isNormalUser ? 'block' : 'none';
-        document.getElementById('estimatedQuantity').required = isNormalUser;
-        
-        document.getElementById('requisitionModal').style.display = 'flex';
-    }
-
-    closeRequisitionModal() {
-        document.getElementById('requisitionModal').style.display = 'none';
-    }
-
     openAddUserModal() {
         document.getElementById('userForm').reset();
-        document.getElementById('userModal').style.display = 'flex';
+        document.getElementById('userModal').style.display = 'block';
     }
 
     closeUserModal() {
         document.getElementById('userModal').style.display = 'none';
     }
+
+    confirmDeleteProduct(productId, productName) {
+        if (confirm(`Tem certeza que deseja excluir o produto "${productName}"?`)) {
+            this.deleteProduct(productId);
+        }
+    }
+
+    updateStats() {
+        const totalProducts = this.products.length;
+        const totalStock = this.products.reduce((sum, p) => sum + (p.quantity || 0), 0);
+        const totalRequisitions = this.requisitions.length;
+
+        document.getElementById('totalProductsStat').textContent = totalProducts;
+        document.getElementById('totalStockStat').textContent = totalStock;
+        document.getElementById('totalRequisitionsStat').textContent = totalRequisitions;
+    }
+
+    updateDashboard() {
+        // Lógica para atualizar o dashboard com gráficos e informações relevantes
+    }
+
+    populateLocationFilter() {
+        const locationFilter = document.getElementById('locationFilter');
+        const locations = [...new Set(this.products.map(p => p.local))];
+        locationFilter.innerHTML = '<option value="">Todos os Locais</option>';
+        locations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            option.textContent = location;
+            locationFilter.appendChild(option);
+        });
+    }
+
+    escapeHtml(text) {
+        if (text === null || text === undefined) {
+            return '';
+        }
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 }
 
-// Inicia o sistema quando o DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => {
     window.inventorySystem = new InventorySystem();
 });
+
