@@ -153,7 +153,10 @@ class InventorySystem {
             const productsCol = collection(db, "products");
             const productSnapshot = await getDocs(productsCol);
             this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Dados carregados do Firestore:", this.products.length, "produtos");
+            console.log("Produtos carregados do Firestore:", this.products.length, "produtos.", this.products);
+            if (this.products.length === 0) {
+                console.warn("Nenhum produto encontrado no Firestore. Verifique sua coleção 'products'.");
+            }
         } catch (error) {
             console.error("Erro ao carregar dados do Firestore:", error);
         }
