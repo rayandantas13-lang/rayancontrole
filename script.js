@@ -1,7 +1,7 @@
 // Importar módulos do Firebase v9
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 
 // Suas credenciais do Firebase (versão 9)
 const firebaseConfig = {
@@ -206,7 +206,7 @@ class InventorySystem {
     async updateProductQuantityInFirestore(productId, newQuantity) {
         try {
             const productRef = doc(db, "products", productId);
-            await update(productRef, { quantity: newQuantity });
+            await updateDoc(productRef, { quantity: newQuantity });
             console.log(`Quantidade do produto ${productId} atualizada para ${newQuantity}`);
             return true;
         } catch (error) {
