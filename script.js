@@ -5,7 +5,7 @@ import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, upda
 
 // Suas credenciais do Firebase (versão 9)
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY_CORRETA_DO_CONSOLE",
+  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
   projectId: "almoxarifado-348d5",
   storageBucket: "almoxarifado-348d5.firebasestorage.app", // ou .appspot.com, o que estiver no console
