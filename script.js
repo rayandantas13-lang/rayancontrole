@@ -352,32 +352,32 @@ class InventorySystem {
         <div class="product-item" data-id="${product.id}">
             <div class="product-header">
                 <div class="product-info">
-                    <h3>${this.escapeHtml(product.name)}</h3>
-                    <span class="product-code">Código: ${this.escapeHtml(product.code)}</span>
+                    <h3>${this.escapeHtml(product.name ?? '')}</h3>
+                    <span class="product-code">Código: ${this.escapeHtml(product.code ?? '')}</span>
                 </div>
                 ${isAdmOrSubAdm ? `
                 <div class="product-actions">
-                    <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditProductModal('${product.id}')">Editar</button>
-                    <button type="button" class="btn-danger" onclick="window.inventorySystem.confirmDeleteProduct('${product.id}', '${this.escapeHtml(product.name)}')">Excluir</button>
+                    <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditProductModal(\'${product.id}\')">Editar</button>
+                    <button type="button" class="btn-danger" onclick="window.inventorySystem.confirmDeleteProduct(\'${product.id}\', \'${this.escapeHtml(product.name ?? '')}\')">Excluir</button>
                 </div>
                 ` : ''}
             </div>
             <div class="product-details">
                 <div class="product-detail">
                     <div class="product-detail-label">Quantidade</div>
-                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity}</span></div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity ?? 0}</span></div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Local</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.local)}</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Última Atualização</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated)}</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated ?? '')}</div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Descrição</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.description)}</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.description ?? '')}</div>
                 </div>
             </div>
         </div>`;
