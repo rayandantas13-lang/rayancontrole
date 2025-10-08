@@ -1,271 +1,391 @@
-// ===================== Firebase Config =====================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { 
-  getFirestore, collection, addDoc, getDocs, onSnapshot, 
-  updateDoc, deleteDoc, doc 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// Importar módulos do Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 
+// Configuração do Firebase (substitua pelas suas credenciais reais)
 const firebaseConfig = {
-  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
-  authDomain: "almoxarifado-348d5.firebaseapp.com",
-  projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.firebasestorage.app",
-  messagingSenderId: "295782162128",
-  appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
-  measurementId: "G-PC0FREL2DF"
+    apiKey: "AIzaSyBOJJGZHKNqHGOOGJJGZHKNqHGOOGJJGZHKNqHGOO", // Substitua pela sua API Key
+    authDomain: "almoxarifado-sistema.firebaseapp.com",
+    projectId: "almoxarifado-sistema",
+    storageBucket: "almoxarifado-sistema.appspot.com",
+    messagingSenderId: "123456789012",
+    appId: "1:123456789012:web:abcdef123456789012345678"
 };
 
-// Inicializa Firebase e Firestore
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ===================== Sistema de Estoque =====================
 class InventorySystem {
     constructor() {
         this.products = [];
-        this.currentEditingId = null;
-        this.filteredProducts = [];
-        this.productToDelete = null;
         this.requisitions = [];
         this.selectedProductsForRequisition = [];
         this.currentTab = 'products';
-        this.requisitionCounter = 1;
-
+        this.nextRequisitionNumber = 1;
+        this.currentUser = null;
+        this.userRole = 'guest'; // guest, normal, subadm, admin
         this.init();
     }
 
-    init() {
-        this.bindEvents();
-        this.loadFromFirestore();
-        this.loadRequisitionsFromFirestore();
+    async init() {
+        this.setupEventListeners();
+        await this.setupAuthListener(); // Configura o listener de autenticação primeiro
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
     }
 
-    // ===================== Firestore =====================
+    // ===================== Authentication and Authorization =====================
+    async setupAuthListener() {
+        return new Promise((resolve) => {
+            onAuthStateChanged(auth, async (user) => {
+                this.currentUser = user;
+                if (user) {
+                    // Carregar o papel do usuário do Firestore
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    if (userDoc.exists()) {
+                        this.userRole = userDoc.data().role;
+                    } else {
+                        // Se o usuário existe no Auth mas não no Firestore, pode ser um novo registro
+                        // ou um usuário com papel padrão (normal)
+                        this.userRole = 'normal';
+                        await setDoc(userDocRef, { email: user.email, role: this.userRole });
+                    }
+                    console.log("Usuário logado:", user.email, "Papel:", this.userRole);
+                    document.getElementById("loginPage").style.display = "none";
+                    document.getElementById("mainApp").style.display = "block";
+                    await this.loadFromFirestore(); // Carregar dados após login
+                    await this.loadRequisitionsFromFirestore();
+                } else {
+                    this.userRole = 'guest';
+                    console.log("Usuário deslogado.");
+                    document.getElementById("loginPage").style.display = "flex";
+                    document.getElementById("mainApp").style.display = "none";
+                    this.products = []; // Limpar dados se deslogado
+                    this.requisitions = [];
+                }
+                this.applyPermissions();
+                this.render();
+                this.updateStats();
+                this.updateDashboard();
+                this.populateLocationFilter();
+                resolve();
+            });
+        });
+    }
+
+    async login(email, password) {
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            alert("Login realizado com sucesso!");
+        } catch (error) {
+            console.error("Erro no login:", error);
+            alert("Erro no login: " + error.message);
+        }
+    }
+
+    async logout() {
+        try {
+            await signOut(auth);
+            alert("Logout realizado com sucesso!");
+        } catch (error) {
+            console.error("Erro no logout:", error);
+            alert("Erro no logout: " + error.message);
+        }
+    }
+
+    applyPermissions() {
+        const isAdmin = this.userRole === 'admin';
+        const isSubAdm = this.userRole === 'subadm';
+        const isNormalUser = this.userRole === 'normal';
+
+        // Gerenciamento de Usuários (apenas ADM)
+        document.getElementById('userManagementTabBtn').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('addUserBtn').style.display = isAdmin ? 'block' : 'none';
+
+        // Adicionar Item (ADM e SubAdm)
+        document.getElementById('addItemBtn').style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
+
+        // Editar/Excluir Produtos (ADM e SubAdm)
+        // A lógica para esconder os botões de editar/excluir individualmente será aplicada na renderização dos produtos
+
+        // Gerar Nova Requisição (Todos, mas com campos específicos para cada um)
+        document.getElementById('generateRequisitionBtn').style.display = (isAdmin || isSubAdm || isNormalUser) ? 'block' : 'none';
+
+        // Campos de requisição (descrição vs quantidade estimada)
+        const requisitionDescriptionLabel = document.querySelector('#requisitionModal label[for="requisitionDescription"]');
+        const requisitionDescriptionInput = document.getElementById('requisitionDescription');
+        const estimatedQuantityLabel = document.querySelector('#requisitionModal label[for="estimatedQuantity"]');
+        const estimatedQuantityInput = document.getElementById('estimatedQuantity');
+
+        if (isNormalUser) {
+            if (requisitionDescriptionLabel) requisitionDescriptionLabel.textContent = 'Descrição (Opcional)';
+            if (requisitionDescriptionInput) requisitionDescriptionInput.removeAttribute('required');
+            if (estimatedQuantityLabel) estimatedQuantityLabel.style.display = 'block';
+            if (estimatedQuantityInput) estimatedQuantityInput.style.display = 'block';
+            if (estimatedQuantityInput) estimatedQuantityInput.setAttribute('required', 'true');
+        } else {
+            if (requisitionDescriptionLabel) requisitionDescriptionLabel.textContent = 'Descrição *';
+            if (requisitionDescriptionInput) requisitionDescriptionInput.setAttribute('required', 'true');
+            if (estimatedQuantityLabel) estimatedQuantityLabel.style.display = 'none';
+            if (estimatedQuantityInput) estimatedQuantityInput.style.display = 'none';
+            if (estimatedQuantityInput) estimatedQuantityInput.removeAttribute('required');
+        }
+
+        // Botões de finalizar requisição (ADM e SubAdm)
+        // A lógica para esconder os botões de finalizar/abastecer será aplicada na renderização das requisições
+
+        // Atualizar renderização para aplicar permissões nos itens da lista
+        this.render();
+        this.renderRequisitions();
+        this.renderUsers();
+    }
+
+    // ===================== Firestore Operations =====================
     async loadFromFirestore() {
         try {
-            const colRef = collection(db, "products");
-            onSnapshot(colRef, (snapshot) => {
-                this.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                this.applyCurrentFilter();
-                this.renderProducts();
-                this.updateStats();
-            });
+            const productsCol = collection(db, "products");
+            const productSnapshot = await getDocs(productsCol);
+            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Dados carregados do Firestore:", this.products.length, "produtos");
         } catch (error) {
-            console.error("Erro ao carregar produtos do Firestore:", error);
+            console.error("Erro ao carregar dados do Firestore:", error);
         }
     }
 
     async loadRequisitionsFromFirestore() {
         try {
-            const colRef = collection(db, "requisitions");
-            onSnapshot(colRef, (snapshot) => {
-                this.requisitions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                this.renderRequisitions();
-                this.updateDashboard();
-            });
+            const requisitionsCol = collection(db, "requisitions");
+            const requisitionSnapshot = await getDocs(requisitionsCol);
+            this.requisitions = requisitionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Requisições carregadas do Firestore:", this.requisitions.length, "requisições");
         } catch (error) {
             console.error("Erro ao carregar requisições do Firestore:", error);
         }
     }
 
-    async addProduct(productData) {
-        const errors = this.validateProduct(productData);
-        if (errors.length > 0) { alert(errors.join("\n")); return false; }
-
-        const product = {
-            name: productData.name.trim(),
-            code: productData.code.trim().toUpperCase(),
-            quantity: parseFloat(productData.quantity),
-            location: productData.location.trim(),
-            description: productData.description?.trim() || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
+    async saveToFirestore(product) {
         try {
-            await addDoc(collection(db, "products"), product);
+            await setDoc(doc(db, "products", product.id), product);
+            console.log("Produto salvo no Firestore:", product.id);
             return true;
         } catch (error) {
-            console.error("Erro ao adicionar produto:", error);
-            alert("Erro ao salvar no servidor.");
+            console.error("Erro ao salvar no Firestore:", error);
             return false;
         }
     }
 
-    async updateProduct(productData) {
-        const errors = this.validateProduct(productData);
-        if (errors.length > 0) { alert(errors.join("\n")); return false; }
-
+    async deleteFromFirestore(productId) {
         try {
-            const ref = doc(db, "products", this.currentEditingId);
-            await updateDoc(ref, {
-                ...productData,
-                code: productData.code.trim().toUpperCase(),
-                quantity: parseFloat(productData.quantity),
-                updatedAt: new Date().toISOString()
-            });
+            await deleteDoc(doc(db, "products", productId));
+            console.log("Produto deletado do Firestore:", productId);
             return true;
         } catch (error) {
-            console.error("Erro ao atualizar produto:", error);
-            alert("Erro ao atualizar no servidor.");
+            console.error("Erro ao deletar do Firestore:", error);
             return false;
         }
     }
 
-    async deleteProduct(productId) {
+    async saveRequisitionToFirestore(requisition) {
         try {
-            const ref = doc(db, "products", productId);
-            await deleteDoc(ref);
+            await setDoc(doc(db, "requisitions", requisition.id), requisition);
+            console.log("Requisição salva no Firestore:", requisition.id);
             return true;
         } catch (error) {
-            console.error("Erro ao excluir produto:", error);
-            alert("Erro ao excluir do servidor.");
+            console.error("Erro ao salvar requisição no Firestore:", error);
             return false;
         }
     }
 
-    async addRequisition(requisitionData) {
+    async updateProductQuantityInFirestore(productId, newQuantity) {
         try {
-            await addDoc(collection(db, "requisitions"), requisitionData);
+            const productRef = doc(db, "products", productId);
+            await setDoc(productRef, { quantity: newQuantity }, { merge: true });
+            console.log(`Quantidade do produto ${productId} atualizada para ${newQuantity}`);
             return true;
         } catch (error) {
-            console.error("Erro ao adicionar requisição:", error);
-            alert("Erro ao salvar requisição no servidor.");
+            console.error("Erro ao atualizar quantidade do produto no Firestore:", error);
             return false;
         }
     }
 
-    // ===================== Validação =====================
-    validateProduct(productData) {
-        const errors = [];
-        if (!productData.name?.trim()) errors.push("Nome do item é obrigatório");
-        if (!productData.code?.trim()) errors.push("Código/ID é obrigatório");
-        if (productData.quantity === '' || productData.quantity < 0) errors.push("Quantidade deve ser maior ou igual a zero");
-        if (!productData.location?.trim()) errors.push("Local é obrigatório");
-        const existing = this.products.find(p => p.code.toLowerCase() === productData.code.toLowerCase() && p.id !== this.currentEditingId);
-        if (existing) errors.push("Já existe um produto com este código");
-        return errors;
-    }
-
-    // ===================== Filtros e busca =====================
-    searchProducts(query) {
-        if (!query?.trim()) this.filteredProducts = [...this.products];
-        else {
-            const term = query.toLowerCase().trim();
-            this.filteredProducts = this.products.filter(p =>
-                p.name.toLowerCase().includes(term) ||
-                p.code.toLowerCase().includes(term) ||
-                p.location.toLowerCase().includes(term) ||
-                (p.description && p.description.toLowerCase().includes(term))
-            );
+    async saveUserToFirestore(uid, email, role) {
+        try {
+            await setDoc(doc(db, "users", uid), { email, role });
+            console.log("Usuário salvo no Firestore:", uid);
+            return true;
+        } catch (error) {
+            console.error("Erro ao salvar usuário no Firestore:", error);
+            return false;
         }
-        this.renderProducts();
     }
 
-    applyCurrentFilter() {
-        const searchInput = document.getElementById("searchInput");
-        if (searchInput?.value?.trim()) this.searchProducts(searchInput.value);
-        else this.filteredProducts = [...this.products];
+    async deleteUserFromFirestore(uid) {
+        try {
+            await deleteDoc(doc(db, "users", uid));
+            console.log("Usuário deletado do Firestore:", uid);
+            return true;
+        } catch (error) {
+            console.error("Erro ao deletar usuário do Firestore:", error);
+            return false;
+        }
     }
 
-    clearSearch() {
-        const searchInput = document.getElementById("searchInput");
-        searchInput.value = '';
-        this.searchProducts('');
-    }
-
-    // ===================== Renderização =====================
-    renderProducts() {
-        const productsList = document.getElementById("productsList");
-        const emptyState = document.getElementById("emptyState");
-        if (this.filteredProducts.length === 0) {
-            productsList.style.display = "none";
-            emptyState.style.display = "block";
+    // ===================== Tab Management =====================
+    switchTab(tabName) {
+        if (!this.currentUser) {
+            alert("Por favor, faça login para acessar o sistema.");
             return;
         }
-        productsList.style.display = "block";
-        emptyState.style.display = "none";
-        productsList.innerHTML = this.filteredProducts.map(p => this.createProductHTML(p)).join('');
+
+        console.log("Aba atual:", tabName);
+        
+        // Atualizar botões das abas
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Atualizar conteúdo das abas
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // Renderizar conteúdo específico da aba
+        if (tabName === 'products') {
+            this.render();
+        } else if (tabName === 'requisition') {
+            this.renderRequisitions();
+        } else if (tabName === 'dashboard') {
+            this.updateDashboard();
+        } else if (tabName === 'userManagement') {
+            this.renderUsers();
+        }
     }
 
-    createProductHTML(p) {
-        const quantityClass = p.quantity >= 50 ? 'quantity-high' : p.quantity >= 10 ? 'quantity-medium' : 'quantity-low';
-        const formattedDate = new Date(p.updatedAt).toLocaleDateString("pt-BR");
+    // ===================== Product Management =====================
+    addProduct(productData) {
+        const product = {
+            id: productData.code, // Usar o código como ID para simplificar
+            name: productData.name,
+            code: productData.code,
+            quantity: parseFloat(productData.quantity),
+            local: productData.local,
+            description: productData.description || '',
+            lastUpdated: new Date().toLocaleDateString("pt-BR")
+        };
+
+        this.products.push(product);
+        this.saveToFirestore(product);
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
+    }
+
+    editProduct(productId, productData) {
+        const index = this.products.findIndex(p => p.id === productId);
+        if (index !== -1) {
+            this.products[index] = {
+                ...this.products[index],
+                name: productData.name,
+                code: productData.code,
+                quantity: parseFloat(productData.quantity),
+                local: productData.local,
+                description: productData.description || '',
+                lastUpdated: new Date().toLocaleDateString("pt-BR")
+            };
+            this.saveToFirestore(this.products[index]);
+            this.render();
+            this.updateStats();
+            this.updateDashboard();
+            this.populateLocationFilter();
+        }
+    }
+
+    deleteProduct(productId) {
+        this.products = this.products.filter(p => p.id !== productId);
+        this.deleteFromFirestore(productId);
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
+    }
+
+    render() {
+        const productsList = document.getElementById("productsList");
+        const emptyState = document.getElementById("emptyState");
+        const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+
+        const filteredProducts = this.products.filter(product =>
+            product.name.toLowerCase().includes(searchTerm) ||
+            product.code.toLowerCase().includes(searchTerm) ||
+            product.local.toLowerCase().includes(searchTerm)
+        );
+
+        if (filteredProducts.length === 0) {
+            emptyState.style.display = "block";
+            productsList.innerHTML = "";
+        } else {
+            emptyState.style.display = "none";
+            productsList.innerHTML = filteredProducts.map(product => this.createProductHTML(product)).join('');
+        }
+    }
+
+    createProductHTML(product) {
+        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
+        const quantityClass = product.quantity < 100 ? 'quantity-low' : product.quantity < 500 ? 'quantity-medium' : 'quantity-high';
+        
         return `
-        <div class="product-item" data-id="${p.id}">
+        <div class="product-item" data-id="${product.id}">
             <div class="product-header">
                 <div class="product-info">
-                    <h3>${this.escapeHtml(p.name)}</h3>
-                    <div class="product-code">Código: ${this.escapeHtml(p.code)}</div>
+                    <h3>${this.escapeHtml(product.name)}</h3>
+                    <span class="product-code">Código: ${this.escapeHtml(product.code)}</span>
                 </div>
+                ${isAdmOrSubAdm ? `
                 <div class="product-actions">
-                    <button class="btn-edit" data-action="edit" data-id="${p.id}">Editar</button>
-                    <button class="btn-delete" data-action="delete" data-id="${p.id}">Excluir</button>
+                    <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditProductModal('${product.id}')">Editar</button>
+                    <button type="button" class="btn-danger" onclick="window.inventorySystem.confirmDeleteProduct('${product.id}', '${this.escapeHtml(product.name)}')">Excluir</button>
                 </div>
+                ` : ''}
             </div>
             <div class="product-details">
                 <div class="product-detail">
                     <div class="product-detail-label">Quantidade</div>
-                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${p.quantity}</span></div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${product.quantity}</span></div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Local</div>
-                    <div class="product-detail-value">${this.escapeHtml(p.location)}</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.local)}</div>
                 </div>
-                ${p.description ? `<div class="product-detail"><div class="product-detail-label">Descrição</div><div class="product-detail-value">${this.escapeHtml(p.description)}</div></div>` : ''}
                 <div class="product-detail">
-                    <div class="product-detail-label">Última atualização</div>
-                    <div class="product-detail-value">${formattedDate}</div>
+                    <div class="product-detail-label">Última Atualização</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated)}</div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Descrição</div>
+                    <div class="product-detail-value">${this.escapeHtml(product.description)}</div>
                 </div>
             </div>
         </div>`;
     }
 
-    escapeHtml(text) {
-        const div = document.createElement("div");
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    updateStats() {
-        const totalItems = document.getElementById("totalItems");
-        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
-        totalItems.textContent = `Total de itens: ${this.products.length} (${totalQuantity} unidades)`;
-    }
-
-    // ===================== Gerenciamento de Abas =====================
-    switchTab(tabName) {
-        // Remove active de todas as abas
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        
-        // Ativa a aba selecionada
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(`${tabName}Tab`).classList.add('active');
-        
-        this.currentTab = tabName;
-        
-        // Atualiza conteúdo específico da aba
-        if (tabName === 'requisition') {
-            this.renderRequisitions();
-        } else if (tabName === 'dashboard') {
-            this.updateDashboard();
-        }
-    }
-
-    // ===================== Gerenciamento de Requisições =====================
-    generateRequisitionNumber(local, description) {
-        const localCode = local.substring(0, 3).toUpperCase();
-        const descCode = description.substring(0, 3).toUpperCase();
-        const number = this.requisitionCounter.toString().padStart(3, '0');
-        this.requisitionCounter++;
-        return `${localCode}${descCode}${number}`;
-    }
-
+    // ===================== Requisition Management =====================
     renderRequisitions() {
-        const requisitionsList = document.getElementById("requisitionsList");
+        const requisitionsList = document.querySelector('#requisitionTab .requisitions-list');
+        if (!requisitionsList) return;
+
         if (this.requisitions.length === 0) {
-            requisitionsList.innerHTML = '<p>Nenhuma requisição realizada ainda.</p>';
+            requisitionsList.innerHTML = '<p class="empty-state">Nenhuma requisição realizada ainda.</p>';
             return;
         }
 
@@ -274,14 +394,15 @@ class InventorySystem {
 
     createRequisitionHTML(req) {
         const formattedDate = new Date(req.createdAt).toLocaleDateString("pt-BR");
-        const statusClass = `status-${req.status || 'pending'}`;
-        const statusText = req.status === 'approved' ? 'Aprovada' : req.status === 'rejected' ? 'Rejeitada' : 'Pendente';
+        const statusClass = req.status === 'finished' ? 'status-finished' : 'status-pending';
+        const statusText = req.status === 'finished' ? 'Finalizado' : 'Pendente';
+        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         
         return `
         <div class="requisition-item" data-id="${req.id}">
             <div class="requisition-header">
                 <div class="requisition-info">
-                    <h3>${this.escapeHtml(req.description)}</h3>
+                    <h3>${this.escapeHtml(req.description || 'Requisição sem descrição')}</h3>
                     <div class="requisition-number">Nº ${req.number}</div>
                 </div>
                 <div class="requisition-status ${statusClass}">${statusText}</div>
@@ -299,34 +420,58 @@ class InventorySystem {
                     <div class="requisition-detail-label">Total de Itens</div>
                     <div class="requisition-detail-value">${req.products.length}</div>
                 </div>
+                ${req.estimatedQuantity ? `
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Estimativa Total</div>
+                    <div class="requisition-detail-value">${req.estimatedQuantity}</div>
+                </div>
+                ` : ''}
+                ${req.finalizedQuantity ? `
+                <div class="requisition-detail">
+                    <div class="requisition-detail-label">Quantidade Finalizada</div>
+                    <div class="requisition-detail-value">${req.finalizedQuantity}</div>
+                </div>
+                ` : ''}
             </div>
             <div class="requisition-products">
                 <h4>Produtos Requisitados:</h4>
                 <div class="requisition-products-list">
                     ${req.products.map(p => `
                         <div class="requisition-product-item">
-                            <span class="requisition-product-name">${this.escapeHtml(p.name)}</span>
-                            <span class="requisition-product-quantity">${p.quantity}</span>
+                            <div class="requisition-product-info">
+                                <span class="requisition-product-name">${this.escapeHtml(p.name)}</span>
+                                <span class="requisition-product-quantity">Solicitado: ${p.requestedQuantity}</span>
+                                ${p.suppliedQuantity ? `<span class="supply-quantity-value">Abastecido: ${p.suppliedQuantity}</span>` : ''}
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             </div>
+            ${isAdmOrSubAdm && req.status === 'pending' ? `
+            <div class="form-actions" style="margin-top: var(--spacing-lg); border-top: 1px solid var(--border-color); padding-top: var(--spacing-lg); justify-content: flex-start;">
+                <input type="number" id="finalizedQuantity-${req.id}" placeholder="Qtd. Real Finalizada" min="1" style="width: 180px; padding: var(--spacing-sm); border-radius: var(--border-radius); border: 1px solid var(--border-color);"/>
+                <button type="button" class="btn-primary" onclick="window.inventorySystem.finalizeRequisition('${req.id}')">Finalizar Requisição</button>
+            </div>
+            ` : ''}
         </div>`;
     }
 
     openRequisitionModal() {
+        if (!this.currentUser) {
+            alert("Por favor, faça login para gerar requisições.");
+            return;
+        }
         this.selectedProductsForRequisition = [];
-        this.clearRequisitionForm();
-        this.openModal("requisitionModal");
-    }
-
-    clearRequisitionForm() {
         document.getElementById("requisitionForm").reset();
         this.renderSelectedProducts();
+        this.renderAvailableProducts();
+        this.applyPermissions(); // Reaplicar permissões para o modal
+        this.showModal("requisitionModal");
     }
 
     renderSelectedProducts() {
         const selectedProducts = document.getElementById("selectedProducts");
+        
         if (this.selectedProductsForRequisition.length === 0) {
             selectedProducts.innerHTML = '<p>Nenhum produto selecionado</p>';
             selectedProducts.classList.remove('has-products');
@@ -352,39 +497,41 @@ class InventorySystem {
     updateSelectedProductQuantity(productId, quantity) {
         const product = this.selectedProductsForRequisition.find(p => p.id === productId);
         if (product) {
-            product.requestedQuantity = parseInt(quantity);
+            product.requestedQuantity = parseFloat(quantity) || 1;
         }
-    }
-
-    removeSelectedProduct(productId) {
-        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
-        this.renderSelectedProducts();
-    }
-
-    openProductSelectionModal() {
-        this.renderAvailableProducts();
-        this.openModal("productSelectionModal");
     }
 
     renderAvailableProducts() {
-        const availableProductsList = document.getElementById("availableProductsList");
-        if (this.products.length === 0) {
-            availableProductsList.innerHTML = '<p>Nenhum produto disponível no estoque.</p>';
+        const productsList = document.getElementById("availableProductsList");
+        const searchTerm = document.getElementById("productSearchInput").value.toLowerCase();
+        const locationFilter = document.getElementById("locationFilter").value;
+        
+        const filteredProducts = this.products.filter(product => {
+            const matchesSearch = product.name.toLowerCase().includes(searchTerm) ||
+                product.code.toLowerCase().includes(searchTerm) ||
+                product.local.toLowerCase().includes(searchTerm);
+            
+            const matchesLocation = !locationFilter || product.local === locationFilter;
+            
+            return matchesSearch && matchesLocation;
+        });
+
+        if (filteredProducts.length === 0) {
+            productsList.innerHTML = '<p class="empty-state">Nenhum produto encontrado.</p>';
             return;
         }
 
-        availableProductsList.innerHTML = this.products.map(p => {
-            const isSelected = this.selectedProductsForRequisition.some(sp => sp.id === p.id);
+        productsList.innerHTML = filteredProducts.map(product => {
+            const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
             return `
-            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-id="${p.id}">
+            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-id="${product.id}">
                 <div class="available-product-info">
-                    <div class="available-product-name">${this.escapeHtml(p.name)}</div>
-                    <div class="available-product-details">Código: ${this.escapeHtml(p.code)} | Estoque: ${p.quantity} | Local: ${this.escapeHtml(p.location)}</div>
+                    <div class="available-product-name">${this.escapeHtml(product.name)}</div>
+                    <div class="available-product-details">Código: ${product.code} | Estoque: ${product.quantity} | Local: ${product.local}</div>
                 </div>
                 <input type="checkbox" class="product-checkbox" ${isSelected ? 'checked' : ''} 
-                       onchange="window.inventorySystem.toggleProductSelection('${p.id}', this.checked)">
-            </div>
-            `;
+                       onchange="window.inventorySystem.toggleProductSelection('${product.id}', this.checked)">
+            </div>`;
         }).join('');
     }
 
@@ -393,21 +540,24 @@ class InventorySystem {
         if (!product) return;
 
         if (isSelected) {
-            if (!this.selectedProductsForRequisition.some(p => p.id === productId)) {
+            if (!this.selectedProductsForRequisition.some(p => p.id === product.id)) {
                 this.selectedProductsForRequisition.push({
                     ...product,
-                    requestedQuantity: 1
+                    requestedQuantity: 1 // Quantidade inicial ao selecionar
                 });
             }
         } else {
             this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
         }
 
-        // Atualiza a visualização
-        const item = document.querySelector(`[data-id="${productId}"]`);
-        if (item) {
-            item.classList.toggle('selected', isSelected);
-        }
+        this.renderSelectedProducts();
+        this.renderAvailableProducts();
+    }
+
+    removeSelectedProduct(productId) {
+        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
+        this.renderSelectedProducts();
+        this.renderAvailableProducts();
     }
 
     confirmProductSelection() {
@@ -417,10 +567,29 @@ class InventorySystem {
 
     async saveRequisition() {
         const local = document.getElementById("requisitionLocal").value.trim();
-        const description = document.getElementById("requisitionDescription").value.trim();
+        const descriptionInput = document.getElementById("requisitionDescription");
+        const estimatedQuantityInput = document.getElementById("estimatedQuantity");
 
-        if (!local || !description) {
-            alert("Por favor, preencha todos os campos obrigatórios.");
+        let description = '';
+        let estimatedQuantity = null;
+
+        if (this.userRole === 'normal') {
+            estimatedQuantity = parseFloat(estimatedQuantityInput.value);
+            if (isNaN(estimatedQuantity) || estimatedQuantity <= 0) {
+                alert("Por favor, insira uma quantidade estimada válida.");
+                return;
+            }
+            description = descriptionInput.value.trim(); // Descrição opcional para usuário normal
+        } else {
+            description = descriptionInput.value.trim();
+            if (!description) {
+                alert("Por favor, preencha a descrição da requisição.");
+                return;
+            }
+        }
+
+        if (!local) {
+            alert("Por favor, preencha o local da requisição.");
             return;
         }
 
@@ -430,176 +599,451 @@ class InventorySystem {
         }
 
         const requisitionData = {
+            id: Date.now().toString(),
             number: this.generateRequisitionNumber(local, description),
             local: local,
             description: description,
+            estimatedQuantity: estimatedQuantity,
             products: this.selectedProductsForRequisition.map(p => ({
                 id: p.id,
                 name: p.name,
                 code: p.code,
-                quantity: p.requestedQuantity
+                requestedQuantity: p.requestedQuantity,
+                suppliedQuantity: 0 // Quantidade abastecida inicialmente é zero
             })),
             status: 'pending',
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            requestedBy: this.currentUser.email
         };
 
-        const success = await this.addRequisition(requisitionData);
-        if (success) {
-            this.closeModal("requisitionModal");
-            this.switchTab('requisition');
-            alert("Requisição gerada com sucesso!");
+        this.requisitions.push(requisitionData);
+        await this.saveRequisitionToFirestore(requisitionData);
+        this.closeModal("requisitionModal");
+        this.renderRequisitions();
+        alert("Requisição gerada com sucesso!");
+    }
+
+    async finalizeRequisition(requisitionId) {
+        if (this.userRole !== 'admin' && this.userRole !== 'subadm') {
+            alert("Você não tem permissão para finalizar requisições.");
+            return;
+        }
+
+        const requisition = this.requisitions.find(req => req.id === requisitionId);
+        if (!requisition) return;
+
+        const finalizedQuantityInput = document.getElementById(`finalizedQuantity-${requisitionId}`);
+        const finalizedQuantity = parseFloat(finalizedQuantityInput.value);
+
+        if (isNaN(finalizedQuantity) || finalizedQuantity <= 0) {
+            alert("Por favor, insira uma quantidade real finalizada válida.");
+            return;
+        }
+
+        // Atualizar status da requisição
+        requisition.status = 'finished';
+        requisition.finalizedQuantity = finalizedQuantity;
+        requisition.finalizedAt = new Date().toISOString();
+        requisition.finalizedBy = this.currentUser.email;
+
+        // Diminuir quantidade dos produtos no estoque
+        for (const reqProduct of requisition.products) {
+            const productInStock = this.products.find(p => p.id === reqProduct.id);
+            if (productInStock) {
+                // Para simplificar, vamos diminuir a quantidade solicitada de cada produto
+                // ou você pode implementar uma lógica mais complexa baseada na finalizedQuantity total
+                // Por enquanto, vamos assumir que a finalizedQuantity total é distribuída proporcionalmente
+                // ou que cada item solicitado é totalmente abastecido.
+                // Para este exemplo, vamos subtrair a quantidade solicitada de cada item.
+                const newQuantity = productInStock.quantity - reqProduct.requestedQuantity;
+                if (newQuantity < 0) {
+                    alert(`Atenção: Estoque insuficiente para ${productInStock.name}. Quantidade em estoque ficará negativa.`);
+                }
+                productInStock.quantity = newQuantity;
+                reqProduct.suppliedQuantity = reqProduct.requestedQuantity; // Marcar como totalmente abastecido
+                await this.updateProductQuantityInFirestore(productInStock.id, newQuantity);
+            }
+        }
+
+        await this.saveRequisitionToFirestore(requisition);
+        this.renderRequisitions();
+        this.render(); // Atualizar lista de produtos para refletir a mudança no estoque
+        this.updateStats();
+        this.updateDashboard();
+        alert("Requisição finalizada e estoque atualizado!");
+    }
+
+    generateRequisitionNumber(local, description) {
+        // Lógica para gerar um número de requisição único
+        // Pode ser baseado em data, hora, e um contador
+        const date = new Date();
+        const year = date.getFullYear().toString().slice(-2);
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const counter = this.nextRequisitionNumber++.toString().padStart(4, '0');
+        return `REQ-${year}${month}${day}-${counter}`;
+    }
+
+    // ===================== User Management =====================
+    async renderUsers() {
+        if (this.userRole !== 'admin') {
+            document.getElementById('userList').innerHTML = '<p class="empty-state">Você não tem permissão para visualizar usuários.</p>';
+            return;
+        }
+
+        const userListDiv = document.getElementById('userList');
+        userListDiv.innerHTML = '';
+
+        try {
+            const usersCol = collection(db, "users");
+            const userSnapshot = await getDocs(usersCol);
+            const users = userSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+
+            if (users.length === 0) {
+                userListDiv.innerHTML = '<p class="empty-state">Nenhum usuário cadastrado.</p>';
+                return;
+            }
+
+            userListDiv.innerHTML = users.map(user => this.createUserHTML(user)).join('');
+        } catch (error) {
+            console.error("Erro ao carregar usuários:", error);
+            userListDiv.innerHTML = '<p class="empty-state">Erro ao carregar usuários.</p>';
         }
     }
 
-    // ===================== Dashboard =====================
-    updateDashboard() {
-        const dashboardSection = document.querySelector('.dashboard-section');
-        if (!dashboardSection) return;
+    createUserHTML(user) {
+        const isAdmin = this.userRole === 'admin';
+        const isCurrentUser = this.currentUser && this.currentUser.uid === user.uid;
+        const canEdit = isAdmin; // ADM pode editar todos
+        const canDelete = isAdmin && !isCurrentUser; // ADM pode deletar todos, exceto ele mesmo
 
-        const totalProducts = this.products.length;
-        const totalQuantity = this.products.reduce((sum, p) => sum + p.quantity, 0);
-        const totalRequisitions = this.requisitions.length;
-        const lowStockProducts = this.products.filter(p => p.quantity < 10).length;
-
-        dashboardSection.innerHTML = `
-            <h2>Dashboard de Estoque</h2>
-            <div class="dashboard-stats">
-                <div class="dashboard-card">
-                    <div class="dashboard-card-title">Total de Produtos</div>
-                    <div class="dashboard-card-value">${totalProducts}</div>
-                    <div class="dashboard-card-subtitle">Itens cadastrados</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-title">Quantidade Total</div>
-                    <div class="dashboard-card-value">${totalQuantity}</div>
-                    <div class="dashboard-card-subtitle">Unidades em estoque</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-title">Requisições</div>
-                    <div class="dashboard-card-value">${totalRequisitions}</div>
-                    <div class="dashboard-card-subtitle">Total realizadas</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="dashboard-card-title">Estoque Baixo</div>
-                    <div class="dashboard-card-value">${lowStockProducts}</div>
-                    <div class="dashboard-card-subtitle">Produtos com menos de 10 unidades</div>
-                </div>
+        return `
+        <div class="user-item" data-uid="${user.uid}">
+            <div class="user-info">
+                <h4>${this.escapeHtml(user.email)}</h4>
+                <p>UID: ${user.uid}</p>
             </div>
-        `;
+            <div class="user-actions">
+                <span class="user-role-badge ${user.role}">${user.role}</span>
+                ${canEdit ? `<button type="button" class="btn-edit" onclick="window.inventorySystem.openEditUserModal('${user.uid}')">Editar</button>` : ''}
+                ${canDelete ? `<button type="button" class="btn-danger" onclick="window.inventorySystem.confirmDeleteUser('${user.uid}', '${this.escapeHtml(user.email)}')">Excluir</button>` : ''}
+            </div>
+        </div>`;
     }
 
-    // ===================== Modais e formulários =====================
-    openModal(id) {
-        document.getElementById(id).classList.add("active");
-        document.getElementById("modalOverlay").classList.add("active");
-        document.body.style.overflow = "hidden";
-        if (id === "productModal") document.getElementById("productName").focus();
+    openAddUserModal() {
+        if (this.userRole !== 'admin') {
+            alert("Você não tem permissão para adicionar usuários.");
+            return;
+        }
+        document.getElementById('userModalTitle').textContent = 'Adicionar Usuário';
+        document.getElementById('userForm').reset();
+        document.getElementById('userEmail').removeAttribute('disabled'); // Habilitar email para novo usuário
+        document.getElementById('userPassword').setAttribute('required', 'true');
+        document.getElementById('userPassword').value = ''; // Limpar senha ao adicionar
+        document.getElementById('userEmail').removeAttribute('data-uid'); // Limpar UID para garantir que é um novo usuário
+        this.showModal('userModal');
     }
 
-    closeModal(id) {
-        document.getElementById(id).classList.remove("active");
-        document.getElementById("modalOverlay").classList.remove("active");
-        document.body.style.overflow = "";
-        if (id === "productModal") {
-            this.clearForm();
-            this.currentEditingId = null;
+    async openEditUserModal(uid) {
+        if (this.userRole !== 'admin') {
+            alert("Você não tem permissão para editar usuários.");
+            return;
+        }
+        const userDocRef = doc(db, "users", uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            document.getElementById('userModalTitle').textContent = 'Editar Usuário';
+            // document.getElementById('userName').value = userData.email; // Usar email como nome para exibição
+            document.getElementById('userEmail').value = userData.email;
+            document.getElementById('userEmail').setAttribute('data-uid', uid); // Armazenar UID para edição
+            document.getElementById('userEmail').setAttribute('disabled', 'true'); // Não permitir editar email
+            document.getElementById('userPassword').removeAttribute('required');
+            document.getElementById('userPassword').value = ''; // Senha opcional na edição
+            document.getElementById('userRole').value = userData.role;
+            this.showModal('userModal');
+        } else {
+            alert("Usuário não encontrado.");
         }
     }
 
-    clearForm() { document.getElementById("productForm").reset(); document.getElementById("modalTitle").textContent = "Adicionar Produto"; }
-    populateForm(p) {
-        document.getElementById("productName").value = p.name;
-        document.getElementById("productCode").value = p.code;
-        document.getElementById("productQuantity").value = p.quantity;
-        document.getElementById("productLocation").value = p.location;
-        document.getElementById("productDescription").value = p.description || '';
-        document.getElementById("modalTitle").textContent = "Editar Produto";
+    async saveUser() {
+        const uid = document.getElementById('userEmail').getAttribute('data-uid');
+        const email = document.getElementById('userEmail').value.trim();
+        const password = document.getElementById('userPassword').value.trim();
+        const role = document.getElementById('userRole').value;
+
+        if (!email || !role) {
+            alert("Por favor, preencha todos os campos obrigatórios.");
+            return;
+        }
+
+        if (uid) { // Edição de usuário
+            // Atualizar papel no Firestore
+            await this.saveUserToFirestore(uid, email, role);
+            // Se a senha foi fornecida, tentar atualizar no Auth
+            if (password) {
+                try {
+                    // Firebase Authentication não permite atualizar a senha de outro usuário diretamente do cliente.
+                    // Isso exigiria uma função de backend (Cloud Function) ou que o próprio usuário reautentique.
+                    // Para este exemplo, vamos apenas logar a tentativa.
+                    console.warn("Atualização de senha de outro usuário via cliente não é suportada pelo Firebase Auth. Necessita de Cloud Function.");
+                    alert("Usuário atualizado com sucesso! A senha, se fornecida, não foi alterada por segurança.");
+                } catch (error) {
+                    console.error("Erro ao atualizar senha:", error);
+                    alert("Erro ao atualizar senha: " + error.message);
+                }
+            } else {
+                alert("Usuário atualizado com sucesso!");
+            }
+        } else { // Adição de novo usuário
+            if (!password) {
+                alert("Por favor, insira uma senha para o novo usuário.");
+                return;
+            }
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                await this.saveUserToFirestore(userCredential.user.uid, email, role);
+                alert("Usuário adicionado com sucesso!");
+            } catch (error) {
+                console.error("Erro ao adicionar usuário:", error);
+                alert("Erro ao adicionar usuário: " + error.message);
+            }
+        }
+        this.closeModal('userModal');
+        this.renderUsers();
     }
 
-    getFormData() {
-        return {
-            name: document.getElementById("productName").value,
-            code: document.getElementById("productCode").value,
-            quantity: document.getElementById("productQuantity").value,
-            location: document.getElementById("productLocation").value,
-            description: document.getElementById("productDescription").value
+    confirmDeleteUser(uid, email) {
+        if (this.userRole !== 'admin') {
+            alert("Você não tem permissão para excluir usuários.");
+            return;
+        }
+        if (this.currentUser && this.currentUser.uid === uid) {
+            alert("Você não pode excluir seu próprio usuário.");
+            return;
+        }
+        if (confirm(`Tem certeza que deseja excluir o usuário ${email}?`)) {
+            this.deleteUser(uid);
+        }
+    }
+
+    async deleteUser(uid) {
+        try {
+            // Para deletar um usuário do Firebase Auth, você precisaria de privilégios de administrador
+            // ou que o próprio usuário se reautentique. Isso geralmente é feito via Cloud Functions.
+            // Aqui, estamos apenas deletando do Firestore.
+            await this.deleteUserFromFirestore(uid);
+            alert("Usuário excluído com sucesso!");
+            this.renderUsers();
+        } catch (error) {
+            console.error("Erro ao excluir usuário:", error);
+            alert("Erro ao excluir usuário: " + error.message);
+        }
+    }
+
+    // ===================== General UI Management =====================
+    setupEventListeners() {
+        // Tab switching
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+        });
+
+        // Product Management
+        document.getElementById('addItemBtn').addEventListener('click', () => this.openAddProductModal());
+        document.getElementById('productForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveProduct();
+        });
+        document.getElementById('closeModal').addEventListener('click', () => this.closeModal('productModal'));
+        document.getElementById('cancelBtn').addEventListener('click', () => this.closeModal('productModal'));
+        document.getElementById('searchInput').addEventListener('keyup', () => this.render());
+        document.getElementById('clearSearch').addEventListener('click', () => {
+            document.getElementById('searchInput').value = '';
+            this.render();
+        });
+
+        // Delete Confirmation Modal
+        document.getElementById('cancelDelete').addEventListener('click', () => this.closeModal('confirmModal'));
+        document.getElementById('confirmDelete').addEventListener('click', () => this.executeDeleteProduct());
+
+        // Requisition Management
+        document.getElementById('generateRequisitionBtn').addEventListener('click', () => this.openRequisitionModal());
+        document.getElementById('requisitionForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveRequisition();
+        });
+        document.getElementById('closeRequisitionModal').addEventListener('click', () => this.closeModal('requisitionModal'));
+        document.getElementById('cancelRequisitionBtn').addEventListener('click', () => this.closeModal('requisitionModal'));
+
+        // Product Selection Modal
+        document.getElementById('selectProductsBtn').addEventListener('click', () => this.showModal('productSelectionModal'));
+        document.getElementById('closeProductSelectionModal').addEventListener('click', () => this.closeModal('productSelectionModal'));
+        document.getElementById('cancelProductSelectionBtn').addEventListener('click', () => this.closeModal('productSelectionModal'));
+        document.getElementById('confirmProductSelectionBtn').addEventListener('click', () => this.confirmProductSelection());
+        document.getElementById('productSearchInput').addEventListener('keyup', () => this.renderAvailableProducts());
+        document.getElementById('locationFilter').addEventListener('change', () => this.renderAvailableProducts());
+
+        // Login Page
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            await this.login(email, password);
+        });
+
+        // Logout Button
+        document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
+
+        // User Management Modal
+        document.getElementById('userManagementTabBtn').addEventListener('click', () => this.switchTab('userManagement'));
+        document.getElementById('addUserBtn').addEventListener('click', () => this.openAddUserModal());
+        document.getElementById('userForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveUser();
+        });
+        document.getElementById('closeUserModal').addEventListener('click', () => this.closeModal('userModal'));
+        document.getElementById('cancelUserBtn').addEventListener('click', () => this.closeModal('userModal'));
+    }
+
+    openAddProductModal() {
+        if (this.userRole !== 'admin' && this.userRole !== 'subadm') {
+            alert("Você não tem permissão para adicionar produtos.");
+            return;
+        }
+        document.getElementById('modalTitle').textContent = 'Adicionar Produto';
+        document.getElementById('productForm').reset();
+        document.getElementById('productCode').removeAttribute('disabled');
+        this.showModal('productModal');
+    }
+
+    openEditProductModal(productId) {
+        if (this.userRole !== 'admin' && this.userRole !== 'subadm') {
+            alert("Você não tem permissão para editar produtos.");
+            return;
+        }
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+            document.getElementById('modalTitle').textContent = 'Editar Produto';
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productCode').value = product.code;
+            document.getElementById('productCode').setAttribute('disabled', 'true'); // Não permitir editar código
+            document.getElementById('productQuantity').value = product.quantity;
+            document.getElementById('productLocation').value = product.local;
+            document.getElementById('productDescription').value = product.description;
+            document.getElementById('productForm').setAttribute('data-editing-id', productId);
+            this.showModal('productModal');
+        }
+    }
+
+    saveProduct() {
+        const productId = document.getElementById('productForm').getAttribute('data-editing-id');
+        const productData = {
+            name: document.getElementById('productName').value.trim(),
+            code: document.getElementById('productCode').value.trim(),
+            quantity: document.getElementById('productQuantity').value.trim(),
+            local: document.getElementById('productLocation').value.trim(),
+            description: document.getElementById('productDescription').value.trim()
         };
+
+        if (!productData.name || !productData.code || !productData.quantity || !productData.local) {
+            alert("Por favor, preencha todos os campos obrigatórios.");
+            return;
+        }
+
+        if (productId) {
+            this.editProduct(productId, productData);
+            alert("Produto atualizado com sucesso!");
+        } else {
+            this.addProduct(productData);
+            alert("Produto adicionado com sucesso!");
+        }
+        this.closeModal('productModal');
     }
 
-    addNewProduct() { this.currentEditingId = null; this.clearForm(); this.openModal("productModal"); }
-    editProduct(id) { const p = this.products.find(p=>p.id===id); if(!p) return alert("Produto não encontrado"); this.currentEditingId = id; this.populateForm(p); this.openModal("productModal"); }
-    confirmDelete(id) { const p=this.products.find(p=>p.id===id); if(!p)return alert("Produto não encontrado"); document.getElementById("deleteProductName").textContent=p.name; this.productToDelete=id; this.openModal("confirmModal"); }
-    async executeDelete() { if(this.productToDelete){ await this.deleteProduct(this.productToDelete); this.productToDelete=null; this.closeModal("confirmModal"); } }
-
-    async saveProduct() {
-        const data = this.getFormData();
-        let success = false;
-        if (this.currentEditingId) success = await this.updateProduct(data);
-        else success = await this.addProduct(data);
-        if (success) this.closeModal("productModal");
+    confirmDeleteProduct(productId, productName) {
+        if (this.userRole !== 'admin' && this.userRole !== 'subadm') {
+            alert("Você não tem permissão para excluir produtos.");
+            return;
+        }
+        document.getElementById('deleteProductName').textContent = productName;
+        document.getElementById('confirmDelete').setAttribute('data-product-id', productId);
+        this.showModal('confirmModal');
     }
 
-    // ===================== Eventos =====================
-    bindEvents() {
-        // Eventos das abas
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    executeDeleteProduct() {
+        const productId = document.getElementById('confirmDelete').getAttribute('data-product-id');
+        this.deleteProduct(productId);
+        this.closeModal('confirmModal');
+        alert("Produto excluído com sucesso!");
+    }
+
+    showModal(modalId) {
+        document.getElementById('modalOverlay').classList.add('active');
+        document.getElementById(modalId).classList.add('active');
+    }
+
+    closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('active');
+        // Verifica se há outros modais ativos antes de remover o overlay
+        const activeModals = document.querySelectorAll('.modal.active');
+        if (activeModals.length === 0) {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+        
+        // Limpar data-editing-id ao fechar o modal de produto
+        if (modalId === 'productModal') {
+            document.getElementById('productForm').removeAttribute('data-editing-id');
+            document.getElementById('productCode').removeAttribute('disabled');
+        }
+        // Limpar data-uid ao fechar o modal de usuário
+        if (modalId === 'userModal') {
+            document.getElementById('userEmail').removeAttribute('data-uid');
+            document.getElementById('userEmail').removeAttribute('disabled');
+            document.getElementById('userPassword').removeAttribute('required');
+        }
+    }
+
+    updateStats() {
+        document.getElementById('totalItems').textContent = `Total de itens: ${this.products.length}`;
+    }
+
+    updateDashboard() {
+        // Lógica para atualizar o dashboard (a ser implementada)
+        const dashboardSection = document.getElementById('dashboardTab').querySelector('.dashboard-section');
+        if (dashboardSection) {
+            dashboardSection.innerHTML = `
+                <h2>Dashboard de Estoque</h2>
+                <p>Total de Produtos: ${this.products.length}</p>
+                <p>Total de Requisições: ${this.requisitions.length}</p>
+                <p>Requisições Pendentes: ${this.requisitions.filter(req => req.status === 'pending').length}</p>
+                <p>Requisições Finalizadas: ${this.requisitions.filter(req => req.status === 'finished').length}</p>
+                <!-- Adicione mais métricas aqui -->
+            `;
+        }
+    }
+
+    populateLocationFilter() {
+        const locationFilter = document.getElementById('locationFilter');
+        const uniqueLocations = [...new Set(this.products.map(p => p.local))];
+        locationFilter.innerHTML = '<option value="">Todos os locais</option>';
+        uniqueLocations.forEach(location => {
+            const option = document.createElement('option');
+            option.value = location;
+            option.textContent = location;
+            locationFilter.appendChild(option);
         });
+    }
 
-        // Eventos dos produtos
-        document.getElementById("addItemBtn").addEventListener("click", () => this.addNewProduct());
-        document.getElementById("searchInput").addEventListener("input", e => this.searchProducts(e.target.value));
-        document.getElementById("clearSearch").addEventListener("click", () => this.clearSearch());
-        document.getElementById("closeModal").addEventListener("click", () => this.closeModal("productModal"));
-        document.getElementById("cancelBtn").addEventListener("click", () => this.closeModal("productModal"));
-        document.getElementById("productForm").addEventListener("submit", e => { e.preventDefault(); this.saveProduct(); });
-        document.getElementById("cancelDelete").addEventListener("click", () => this.closeModal("confirmModal"));
-        document.getElementById("confirmDelete").addEventListener("click", () => this.executeDelete());
-
-        // Eventos das requisições
-        document.getElementById("generateRequisitionBtn").addEventListener("click", () => this.openRequisitionModal());
-        document.getElementById("closeRequisitionModal").addEventListener("click", () => this.closeModal("requisitionModal"));
-        document.getElementById("cancelRequisitionBtn").addEventListener("click", () => this.closeModal("requisitionModal"));
-        document.getElementById("requisitionForm").addEventListener("submit", e => { e.preventDefault(); this.saveRequisition(); });
-        document.getElementById("selectProductsBtn").addEventListener("click", () => this.openProductSelectionModal());
-        document.getElementById("closeProductSelectionModal").addEventListener("click", () => this.closeModal("productSelectionModal"));
-        document.getElementById("cancelProductSelectionBtn").addEventListener("click", () => this.closeModal("productSelectionModal"));
-        document.getElementById("confirmProductSelectionBtn").addEventListener("click", () => this.confirmProductSelection());
-
-        // Eventos gerais dos modais
-        document.getElementById("modalOverlay").addEventListener("click", () => {
-            const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id);
-        });
-        document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ const active=document.querySelector(".modal.active"); if(active) this.closeModal(active.id); }});
-        document.querySelectorAll(".modal-content").forEach(c=>c.addEventListener("click", e=>e.stopPropagation()));
-
-        // Eventos dinâmicos para os botões "Editar" e "Excluir"
-        document.getElementById("productsList").addEventListener("click", e => {
-            if (e.target.matches("[data-action='edit']")) {
-                this.editProduct(e.target.dataset.id);
-            }
-            if (e.target.matches("[data-action='delete']")) {
-                this.confirmDelete(e.target.dataset.id);
-            }
-        });
-
-        // Evento de busca de produtos no modal de seleção
-        document.getElementById("productSearchInput").addEventListener("input", e => {
-            const query = e.target.value.toLowerCase();
-            const items = document.querySelectorAll('.available-product-item');
-            items.forEach(item => {
-                const name = item.querySelector('.available-product-name').textContent.toLowerCase();
-                const details = item.querySelector('.available-product-details').textContent.toLowerCase();
-                const matches = name.includes(query) || details.includes(query);
-                item.style.display = matches ? 'flex' : 'none';
-            });
-        });
+    escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 }
 
-// ===================== Inicialização =====================
-document.addEventListener('DOMContentLoaded', () => {
-    const inventorySystem = new InventorySystem();
-    window.inventorySystem = inventorySystem; // só para depuração no console
-});
+window.inventorySystem = new InventorySystem();
