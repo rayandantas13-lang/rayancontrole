@@ -794,7 +794,8 @@ class InventorySystem {
                     console.error("Erro ao atualizar senha:", error);
                     alert("Erro ao atualizar senha: " + error.message);
                 }
-            } else {
+            }
+             else {
                 alert("Usuário atualizado com sucesso!");
             }
         } else { // Adição de novo usuário
