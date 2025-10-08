@@ -5,12 +5,13 @@ import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, quer
 
 // Configuração do Firebase (substitua pelas suas credenciais reais)
 const firebaseConfig = {
-    apiKey: "AIzaSyBOJJGZHKNqHGOOGJJGZHKNqHGOOGJJGZHKNqHGOO", // Substitua pela sua API Key
-    authDomain: "almoxarifado-sistema.firebaseapp.com",
-    projectId: "almoxarifado-sistema",
-    storageBucket: "almoxarifado-sistema.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef123456789012345678"
+  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
+  authDomain: "almoxarifado-348d5.firebaseapp.com",
+  projectId: "almoxarifado-348d5",
+  storageBucket: "almoxarifado-348d5.firebasestorage.app",
+  messagingSenderId: "295782162128",
+  appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
+  measurementId: "G-PC0FREL2DF"
 };
 
 // Inicializar Firebase
