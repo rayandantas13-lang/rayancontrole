@@ -680,7 +680,9 @@ class InventorySystem {
         const year = date.getFullYear().toString().slice(-2);
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const day = date.getDate().toString().padStart(2, '0');
-        const counter = this.nextRequisitionNumber++.toString().padStart(4, '0');
+            const currentRequisitionNumber = this.nextRequisitionNumber;
+            this.nextRequisitionNumber++;
+            const counter = currentRequisitionNumber.toString().padStart(4, '0');
         return `REQ-${year}${month}${day}-${counter}`;
     }
 
