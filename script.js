@@ -1,24 +1,25 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// Importar módulos do Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Configuração do Firebase (substitua pelas suas credenciais reais)
 const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
   projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.firebasestorage.app",
+  storageBucket: "almoxarifado-348d5.appspot.com",
   messagingSenderId: "295782162128",
   appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
   measurementId: "G-PC0FREL2DF"
 };
 
-// Initialize Firebase
+
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 
 class InventorySystem {
     constructor() {
