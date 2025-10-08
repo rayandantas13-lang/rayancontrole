@@ -7,182 +7,267 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Sistema de Controle de Estoque</h1>
-            <p>Gerenciamento de Almoxarifado</p>
-        </header>
-
-        <main>
-            <nav class="tab-navigation">
-                <button class="tab-button active" data-tab="products">Produtos em Estoque</button>
-                <button class="tab-button" data-tab="requisition">Requisição</button>
-                <button class="tab-button" data-tab="dashboard">Dashboard</button>
-            </nav>
-
-            <div id="productsTab" class="tab-content active">
-            <section class="search-section">
-                <div class="search-container">
-                    <input type="text" id="searchInput" placeholder="Buscar produtos por nome, código ou local...">
-                    <button type="button" id="clearSearch">Limpar</button>
-                </div>
-            </section>
-
-            <!-- Botão para adicionar novo item -->
-            <section class="actions-section">
-                <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
-                <div class="stats">
-                    <span id="totalItems">Total de itens: 0</span>
-                </div>
-            </section>
-
-            <!-- Lista de produtos -->
-            <section class="products-section">
-                <div class="products-header">
-                    <h2>Produtos em Estoque</h2>
-                </div>
-                <div id="productsList" class="products-list">
-                    <!-- Produtos renderizados dinamicamente -->
-                </div>
-                <div id="emptyState" class="empty-state">
-                    <p>Nenhum produto encontrado no estoque.</p>
-                    <p>Clique em "Adicionar Item" para começar.</p>
-                </div>
-            </section>
+    <!-- Página de Login Dedicada -->
+    <div id="loginPage" class="full-screen-page active">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>Bem-vindo ao Sistema de Estoque</h1>
+                <p>Faça login para continuar</p>
             </div>
-
-            <div id="requisitionTab" class="tab-content">
-                <section class="actions-section">
-                    <button type="button" id="generateRequisitionBtn" class="btn-primary">Gerar Nova Requisição</button>
-                </section>
-                <section class="requisitions-section">
-                    <h2>Requisições Realizadas</h2>
-                    <div id="requisitionsList" class="requisitions-list">
-                        <p>Nenhuma requisição realizada ainda.</p>
-                    </div>
-                </section>
-            </div>
-
-            <div id="dashboardTab" class="tab-content">
-                <section class="dashboard-section">
-                    <h2>Dashboard de Estoque</h2>
-                    <p>Conteúdo do Dashboard será implementado aqui.</p>
-                </section>
-            </div>
-        </main>
-
-        <!-- Modal para adicionar/editar produtos -->
-        <div id="productModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="modalTitle">Adicionar Produto</h3>
-                    <button type="button" id="closeModal" class="close-btn">&times;</button>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required>
                 </div>
-                <form id="productForm">
-                    <div class="form-group">
-                        <label for="productName">Nome do Item *</label>
-                        <input type="text" id="productName" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="productCode">Código/ID *</label>
-                        <input type="text" id="productCode" name="code" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="productQuantity">Quantidade em Estoque *</label>
-                        <input type="number" id="productQuantity" placeholder="Quantidade" step="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="productLocation">Local (Setor/Prateleira) *</label>
-                        <input type="text" id="productLocation" name="location" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="productDescription">Descrição (Opcional)</label>
-                        <textarea id="productDescription" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" id="cancelBtn" class="btn-secondary">Cancelar</button>
-                        <button type="submit" id="saveBtn" class="btn-primary">Salvar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Modal de confirmação para exclusão -->
-        <div id="confirmModal" class="modal">
-            <div class="modal-content confirm-modal">
-                <div class="modal-header">
-                    <h3>Confirmar Exclusão</h3>
-                </div>
-                <div class="modal-body">
-                    <p>Tem certeza que deseja excluir este produto?</p>
-                    <p><strong id="deleteProductName"></strong></p>
-                    <p>Esta ação não pode ser desfeita.</p>
+                <div class="form-group">
+                    <label for="loginPassword">Senha</label>
+                    <input type="password" id="loginPassword" required>
                 </div>
                 <div class="form-actions">
-                    <button type="button" id="cancelDelete" class="btn-secondary">Cancelar</button>
-                    <button type="button" id="confirmDelete" class="btn-danger">Excluir</button>
+                    <button type="submit" class="btn-primary">Entrar</button>
                 </div>
-            </div>
+            </form>
         </div>
-
-        <!-- Modal para gerar nova requisição -->
-        <div id="requisitionModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Gerar Nova Requisição</h3>
-                    <button type="button" id="closeRequisitionModal" class="close-btn">&times;</button>
-                </div>
-                <form id="requisitionForm">
-                    <div class="form-group">
-                        <label for="requisitionLocal">Local *</label>
-                        <input type="text" id="requisitionLocal" name="local" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="requisitionDescription">Descrição *</label>
-                        <input type="text" id="requisitionDescription" name="description" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Produtos Requisitados</label>
-                        <div id="selectedProducts" class="selected-products">
-                            <p>Nenhum produto selecionado</p>
-                        </div>
-                        <button type="button" id="selectProductsBtn" class="btn-secondary">Selecionar Produtos</button>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" id="cancelRequisitionBtn" class="btn-secondary">Cancelar</button>
-                        <button type="submit" id="saveRequisitionBtn" class="btn-primary">Gerar Requisição</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Modal para selecionar produtos -->
-        <div id="productSelectionModal" class="modal">
-            <div class="modal-content large-modal">
-                <div class="modal-header">
-                    <h3>Selecionar Produtos</h3>
-                    <button type="button" id="closeProductSelectionModal" class="close-btn">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="search-container">
-                        <input type="text" id="productSearchInput" placeholder="Buscar produtos...">
-                    </div>
-                    <div id="availableProductsList" class="available-products-list">
-                        <!-- Produtos disponíveis para seleção -->
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" id="cancelProductSelectionBtn" class="btn-secondary">Cancelar</button>
-                    <button type="button" id="confirmProductSelectionBtn" class="btn-primary">Confirmar Seleção</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Overlay para modais -->
-        <div id="modalOverlay" class="modal-overlay"></div>
     </div>
+
+    <!-- Conteúdo Principal da Aplicação (inicialmente oculto) -->
+    <div id="mainApp" style="display: none;">
+        <div class="container">
+            <header>
+                <h1>Sistema de Controle de Estoque</h1>
+                <p>Gerenciamento de Almoxarifado</p>
+                <button type="button" id="logoutBtn" class="btn-secondary logout-btn">Sair</button>
+            </header>
+
+            <main>
+                <nav class="tab-navigation">
+                    <button class="tab-button active" data-tab="products">Produtos em Estoque</button>
+                    <button class="tab-button" data-tab="requisition">Requisição</button>
+                    <button class="tab-button" data-tab="dashboard">Dashboard</button>
+                    <button class="tab-button" data-tab="userManagement" id="userManagementTabBtn" style="display: none;">Gerenciar Usuários</button>
+                </nav>
+
+                <div id="productsTab" class="tab-content active">
+                <section class="search-section">
+                    <div class="search-container">
+                        <input type="text" id="searchInput" placeholder="Buscar produtos por nome, código ou local...">
+                        <button type="button" id="clearSearch">Limpar</button>
+                    </div>
+                </section>
+
+                <!-- Botão para adicionar novo item -->
+                <section class="actions-section">
+                    <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
+                    <div class="stats">
+                        <span id="totalItems">Total de itens: 0</span>
+                    </div>
+                </section>
+
+                <!-- Lista de produtos -->
+                <section class="products-section">
+                    <div class="products-header">
+                        <h2>Produtos em Estoque</h2>
+                    </div>
+                    <div id="productsList" class="products-list">
+                        <!-- Produtos renderizados dinamicamente -->
+                    </div>
+                    <div id="emptyState" class="empty-state">
+                        <p>Nenhum produto encontrado no estoque.</p>
+                        <p>Clique em "Adicionar Item" para começar.</p>
+                    </div>
+                </section>
+                </div>
+
+                <div id="requisitionTab" class="tab-content">
+                    <section class="actions-section">
+                        <button type="button" id="generateRequisitionBtn" class="btn-primary">Gerar Nova Requisição</button>
+                    </section>
+                    <section class="requisitions-section">
+                        <h2>Requisições Realizadas</h2>
+                        <div id="requisitionsList" class="requisitions-list">
+                            <p>Nenhuma requisição realizada ainda.</p>
+                        </div>
+                    </section>
+                </div>
+
+                <div id="dashboardTab" class="tab-content">
+                    <section class="dashboard-section">
+                        <h2>Dashboard de Estoque</h2>
+                        <p>Conteúdo do Dashboard será implementado aqui.</p>
+                    </section>
+                </div>
+
+                <!-- Nova aba para Gerenciamento de Usuários -->
+                <div id="userManagementTab" class="tab-content">
+                    <section class="actions-section">
+                        <button type="button" id="addUserBtn" class="btn-primary">+ Adicionar Novo Usuário</button>
+                    </section>
+                    <section class="user-list-section">
+                        <h2>Usuários do Sistema</h2>
+                        <div id="userList" class="user-list">
+                            <p>Nenhum usuário cadastrado.</p>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal para adicionar/editar produtos -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Adicionar Produto</h3>
+                <button type="button" id="closeModal" class="close-btn">&times;</button>
+            </div>
+            <form id="productForm">
+                <div class="form-group">
+                    <label for="productName">Nome do Item *</label>
+                    <input type="text" id="productName" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="productCode">Código/ID *</label>
+                    <input type="text" id="productCode" name="code" required>
+                </div>
+                <div class="form-group">
+                    <label for="productQuantity">Quantidade em Estoque *</label>
+                    <input type="number" id="productQuantity" placeholder="Quantidade" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="productLocation">Local (Setor/Prateleira) *</label>
+                    <input type="text" id="productLocation" name="location" required>
+                </div>
+                <div class="form-group">
+                    <label for="productDescription">Descrição (Opcional)</label>
+                    <textarea id="productDescription" name="description" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancelBtn" class="btn-secondary">Cancelar</button>
+                    <button type="submit" id="saveBtn" class="btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de confirmação para exclusão -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content confirm-modal">
+            <div class="modal-header">
+                <h3>Confirmar Exclusão</h3>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir este produto?</p>
+                <p><strong id="deleteProductName"></strong></p>
+                <p>Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="cancelDelete" class="btn-secondary">Cancelar</button>
+                <button type="button" id="confirmDelete" class="btn-danger">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para gerar nova requisição -->
+    <div id="requisitionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gerar Nova Requisição</h3>
+                <button type="button" id="closeRequisitionModal" class="close-btn">&times;</button>
+            </div>
+            <form id="requisitionForm">
+                <div class="form-group">
+                    <label for="requisitionLocal">Local *</label>
+                    <input type="text" id="requisitionLocal" name="local" required>
+                </div>
+                <div class="form-group">
+                    <label for="requisitionDescription">Descrição *</label>
+                    <input type="text" id="requisitionDescription" name="description" required>
+                </div>
+                <div class="form-group">
+                    <label for="estimatedQuantity">Quantidade Estimada *</label>
+                    <input type="number" id="estimatedQuantity" name="estimatedQuantity" placeholder="Quantidade estimada total" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Produtos Requisitados</label>
+                    <div id="selectedProducts" class="selected-products">
+                        <p>Nenhum produto selecionado</p>
+                    </div>
+                    <button type="button" id="selectProductsBtn" class="btn-secondary">Selecionar Produtos</button>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancelRequisitionBtn" class="btn-secondary">Cancelar</button>
+                    <button type="submit" id="saveRequisitionBtn" class="btn-primary">Gerar Requisição</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para selecionar produtos -->
+    <div id="productSelectionModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3>Selecionar Produtos</h3>
+                <button type="button" id="closeProductSelectionModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-container">
+                    <input type="text" id="productSearchInput" placeholder="Buscar produtos...">
+                    <select id="locationFilter" class="location-filter">
+                        <option value="">Todos os locais</option>
+                    </select>
+                </div>
+                <div id="availableProductsList" class="available-products-list">
+                    <!-- Produtos disponíveis para seleção -->
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="cancelProductSelectionBtn" class="btn-secondary">Cancelar</button>
+                <button type="button" id="confirmProductSelectionBtn" class="btn-primary">Confirmar Seleção</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar/Editar Usuário -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="userModalTitle">Adicionar Usuário</h3>
+                <button type="button" id="closeUserModal" class="close-btn">&times;</button>
+            </div>
+            <form id="userForm">
+                <div class="form-group">
+                    <label for="userName">Nome</label>
+                    <input type="text" id="userName" required>
+                </div>
+                <div class="form-group">
+                    <label for="userEmail">Email</label>
+                    <input type="email" id="userEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="userPassword">Senha</label>
+                    <input type="password" id="userPassword" placeholder="Deixe em branco para não alterar" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="userRole">Nível de Acesso</label>
+                    <select id="userRole" required>
+                        <option value="normal">Usuário Normal</option>
+                        <option value="subadm">SubAdm</option>
+                        <option value="admin">ADM</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancelUserBtn" class="btn-secondary">Cancelar</button>
+                    <button type="submit" id="saveUserBtn" class="btn-primary">Salvar Usuário</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Overlay para modais -->
+    <div id="modalOverlay" class="modal-overlay"></div>
     
     <!-- Script principal -->
     <script type="module" src="script.js"></script>
 </body>
 </html>
+
