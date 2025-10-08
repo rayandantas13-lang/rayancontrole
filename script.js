@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebas
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
 
-// Suas credenciais do Firebase (versão 9)
+// Suas credenciais do Firebase (versão 9 )
 const firebaseConfig = {
   apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
   authDomain: "almoxarifado-348d5.firebaseapp.com",
@@ -585,9 +585,11 @@ class InventorySystem {
         document.getElementById('generateRequisitionBtn').addEventListener('click', () => this.openRequisitionModal());
         document.getElementById('addUserBtn').addEventListener('click', () => this.openAddUserModal());
 
-        document.getElementById('productModal').querySelector('.close').addEventListener('click', () => this.closeProductModal());
-        document.getElementById('requisitionModal').querySelector('.close').addEventListener('click', () => this.closeRequisitionModal());
-        document.getElementById('userModal').querySelector('.close').addEventListener('click', () => this.closeUserModal());
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Usar os IDs específicos dos botões de fechar para evitar erros
+        document.getElementById('closeModal').addEventListener('click', () => this.closeProductModal());
+        document.getElementById('closeRequisitionModal').addEventListener('click', () => this.closeRequisitionModal());
+        document.getElementById('closeUserModal').addEventListener('click', () => this.closeUserModal());
 
         // Forms
         document.getElementById('productForm').addEventListener('submit', (e) => {
@@ -626,7 +628,7 @@ class InventorySystem {
     openAddProductModal() {
         document.getElementById('productForm').reset();
         document.getElementById('productId').value = '';
-        document.getElementById('productModalTitle').textContent = 'Adicionar Novo Produto';
+        document.getElementById('modalTitle').textContent = 'Adicionar Novo Produto';
         document.getElementById('productModal').style.display = 'block';
     }
 
@@ -639,7 +641,7 @@ class InventorySystem {
             document.getElementById('productQuantity').value = product.quantity;
             document.getElementById('productLocal').value = product.local;
             document.getElementById('productDescription').value = product.description;
-            document.getElementById('productModalTitle').textContent = 'Editar Produto';
+            document.getElementById('modalTitle').textContent = 'Editar Produto';
             document.getElementById('productModal').style.display = 'block';
         }
     }
@@ -668,9 +670,14 @@ class InventorySystem {
         const totalStock = this.products.reduce((sum, p) => sum + (p.quantity || 0), 0);
         const totalRequisitions = this.requisitions.length;
 
-        document.getElementById('totalProductsStat').textContent = totalProducts;
-        document.getElementById('totalStockStat').textContent = totalStock;
-        document.getElementById('totalRequisitionsStat').textContent = totalRequisitions;
+        // Verifica se os elementos existem antes de tentar atualizá-los
+        const totalProductsStat = document.getElementById('totalProductsStat');
+        const totalStockStat = document.getElementById('totalStockStat');
+        const totalRequisitionsStat = document.getElementById('totalRequisitionsStat');
+
+        if (totalProductsStat) totalProductsStat.textContent = totalProducts;
+        if (totalStockStat) totalStockStat.textContent = totalStock;
+        if (totalRequisitionsStat) totalRequisitionsStat.textContent = totalRequisitions;
     }
 
     updateDashboard() {
@@ -679,6 +686,8 @@ class InventorySystem {
 
     populateLocationFilter() {
         const locationFilter = document.getElementById('locationFilter');
+        if (!locationFilter) return; // Garante que o elemento existe
+        
         const locations = [...new Set(this.products.map(p => p.local))];
         locationFilter.innerHTML = '<option value="">Todos os Locais</option>';
         locations.forEach(location => {
@@ -705,4 +714,3 @@ class InventorySystem {
 document.addEventListener('DOMContentLoaded', () => {
     window.inventorySystem = new InventorySystem();
 });
-
