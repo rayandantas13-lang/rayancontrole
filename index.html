@@ -267,7 +267,12 @@
     <div id="modalOverlay" class="modal-overlay"></div>
     
     <!-- Script principal -->
-    <script type="module" src="script.js"></script>
+        <!-- Firebase SDK (versão compatível, não modular) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <!-- Script principal -->
+    <script src="script.js"></script>
 </body>
 </html>
-
