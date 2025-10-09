@@ -434,8 +434,108 @@ class InventorySystem {
     }
 
     updateDashboard() {
-        // Implementar lógica do dashboard aqui
-        console.log("Dashboard atualizado");
+        const dashboardSection = document.querySelector('#dashboardTab .dashboard-section');
+        if (dashboardSection && this.products.length > 0) {
+            const totalProducts = this.products.length;
+            const totalQuantity = this.products.reduce((sum, product) => sum + (product.quantity || 0), 0);
+            const lowStockProducts = this.products.filter(product => (product.quantity || 0) < 100).length;
+            const locations = [...new Set(this.products.map(p => p.local).filter(Boolean))];
+            const totalRequisitions = this.requisitions.length;
+            const pendingRequisitions = this.requisitions.filter(r => r.status === 'Pendente').length;
+            
+            // Produtos por local
+            const productsByLocation = {};
+            this.products.forEach(product => {
+                const location = product.local || 'Sem local';
+                productsByLocation[location] = (productsByLocation[location] || 0) + 1;
+            });
+            
+            dashboardSection.innerHTML = `
+                <h2>Dashboard de Estoque</h2>
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">📦</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${totalProducts}</div>
+                            <div class="stat-label">Total de Produtos</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${totalQuantity}</div>
+                            <div class="stat-label">Quantidade Total</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${lowStockProducts}</div>
+                            <div class="stat-label">Estoque Baixo</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📍</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${locations.length}</div>
+                            <div class="stat-label">Locais Diferentes</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${totalRequisitions}</div>
+                            <div class="stat-label">Total Requisições</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <div class="stat-value">${pendingRequisitions}</div>
+                            <div class="stat-label">Requisições Pendentes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-charts">
+                    <div class="chart-container">
+                        <h3>Produtos por Local</h3>
+                        <div class="location-chart">
+                            ${Object.entries(productsByLocation).map(([location, count]) => `
+                                <div class="location-bar">
+                                    <div class="location-name">${this.escapeHtml(location)}</div>
+                                    <div class="location-progress">
+                                        <div class="location-progress-bar" style="width: ${(count / totalProducts) * 100}%"></div>
+                                    </div>
+                                    <div class="location-count">${count}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <h3>Produtos com Estoque Baixo</h3>
+                        <div class="low-stock-list">
+                            ${this.products.filter(p => (p.quantity || 0) < 100).slice(0, 5).map(product => `
+                                <div class="low-stock-item">
+                                    <div class="product-name">${this.escapeHtml(product.name || '')}</div>
+                                    <div class="product-quantity quantity-low">${product.quantity || 0}</div>
+                                </div>
+                            `).join('') || '<p>Nenhum produto com estoque baixo</p>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (dashboardSection) {
+            dashboardSection.innerHTML = `
+                <h2>Dashboard de Estoque</h2>
+                <div class="empty-dashboard">
+                    <p>Nenhum dado disponível para exibir.</p>
+                    <p>Adicione produtos ao estoque para ver as estatísticas.</p>
+                </div>
+            `;
+        }
+        console.log("Dashboard atualizado com dados");
     }
 
     populateLocationFilter() {
@@ -728,9 +828,20 @@ class InventorySystem {
 
     populateAvailableProducts() {
         const availableProductsList = document.getElementById('availableProductsList');
+        const locationFilter = document.getElementById('locationFilter');
+        
         if (availableProductsList) {
-            availableProductsList.innerHTML = this.products.map(product => `
-                <div class="available-product-item" data-product-id="${product.id}">
+            // Atualizar o filtro de locais
+            this.updateLocationFilterInModal();
+            
+            // Filtrar produtos baseado no local selecionado
+            const selectedLocation = locationFilter ? locationFilter.value : '';
+            const filteredProducts = selectedLocation ? 
+                this.products.filter(product => product.local === selectedLocation) : 
+                this.products;
+            
+            availableProductsList.innerHTML = filteredProducts.map(product => `
+                <div class="available-product-item" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
                     <div class="available-product-info">
                         <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
                         <div class="available-product-details">Código: ${this.escapeHtml(product.code ?? '')} | Local: ${this.escapeHtml(product.local ?? '')} | Estoque: ${product.quantity ?? 0}</div>
@@ -751,6 +862,22 @@ class InventorySystem {
                         productItem.classList.remove('selected');
                     }
                 });
+            });
+        }
+    }
+
+    updateLocationFilterInModal() {
+        const locationFilter = document.getElementById('locationFilter');
+        if (locationFilter) {
+            const locations = [...new Set(this.products.map(p => p.local).filter(Boolean))];
+            const currentValue = locationFilter.value;
+            
+            locationFilter.innerHTML = '<option value="">Todos os locais</option>' +
+                locations.map(location => `<option value="${this.escapeHtml(location)}" ${currentValue === location ? 'selected' : ''}>${this.escapeHtml(location)}</option>`).join('');
+            
+            // Adicionar event listener para o filtro de local
+            locationFilter.addEventListener('change', () => {
+                this.populateAvailableProducts();
             });
         }
     }
@@ -1025,13 +1152,22 @@ class InventorySystem {
 
     filterAvailableProducts(searchTerm) {
         const availableProductItems = document.querySelectorAll('.available-product-item');
+        const locationFilter = document.getElementById('locationFilter');
+        const selectedLocation = locationFilter ? locationFilter.value : '';
         const term = searchTerm.toLowerCase();
         
         availableProductItems.forEach(item => {
             const name = item.querySelector('.available-product-name').textContent.toLowerCase();
             const details = item.querySelector('.available-product-details').textContent.toLowerCase();
+            const location = item.dataset.location || '';
             
-            if (name.includes(term) || details.includes(term)) {
+            // Verificar se o item corresponde ao filtro de busca
+            const matchesSearch = name.includes(term) || details.includes(term);
+            
+            // Verificar se o item corresponde ao filtro de local
+            const matchesLocation = !selectedLocation || location === selectedLocation;
+            
+            if (matchesSearch && matchesLocation) {
                 item.style.display = 'flex';
             } else {
                 item.style.display = 'none';
