@@ -17,11 +17,13 @@
             <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label for="loginEmail">Email</label>
-                    <input type="email" id="loginEmail" required>
+                    <!-- MODIFICAÇÃO AQUI: Adicionado name="email" -->
+                    <input type="email" id="loginEmail" name="email" required>
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Senha</label>
-                    <input type="password" id="loginPassword" required>
+                    <!-- MODIFICAÇÃO AQUI: Adicionado name="password" -->
+                    <input type="password" id="loginPassword" name="password" required>
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary">Entrar</button>
@@ -137,7 +139,7 @@
                     <label for="productLocation">Local (Setor/Prateleira) *</label>
                     <input type="text" id="productLocation" name="location" required>
                 </div>
-                <div class="form-group">
+                <div class.form-group">
                     <label for="productDescription">Descrição (Opcional)</label>
                     <textarea id="productDescription" name="description" rows="3"></textarea>
                 </div>
@@ -267,7 +269,6 @@
     <div id="modalOverlay" class="modal-overlay"></div>
     
     <!-- Script principal -->
-        <!-- Script principal -->
     <script type="module" src="script.js"></script>
 </body>
 </html>
