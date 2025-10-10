@@ -1,3 +1,7 @@
+// inventory-system-complete.js
+// Sistema de Almoxarifado - Código Completo Atualizado
+// Data: 10/10/2025
+
 // Importar módulos do Firebase v9
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
@@ -34,6 +38,33 @@ class InventorySystem {
     async init() {
         this.setupEventListeners();
         await this.setupAuthListener(); // Configura o listener de autenticação primeiro
+    }
+
+    // ===================== Utilitários de Formatação =====================
+    formatNumber(number, decimalPlaces = 0) {
+        if (number === null || number === undefined) return '0';
+        
+        // Arredonda para no máximo 3 casas decimais
+        const rounded = Number(number).toFixed(decimalPlaces);
+        
+        // Formata com separador de milhares
+        return Number(rounded).toLocaleString('pt-BR', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: decimalPlaces
+        });
+    }
+
+    formatDateTime(date) {
+        if (!date) return '';
+        
+        const d = new Date(date);
+        // Formata como: 10/10/2025 - 08:46
+        return d.toLocaleDateString('pt-BR') + ' - ' + 
+               d.toLocaleTimeString('pt-BR', { 
+                   hour: '2-digit', 
+                   minute: '2-digit',
+                   hour12: false 
+               });
     }
 
     // ===================== Authentication and Authorization =====================
@@ -385,7 +416,7 @@ class InventorySystem {
             <div class="product-details">
                 <div class="product-detail">
                     <div class="product-detail-label">Quantidade</div>
-                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${quantity}</span></div>
+                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${this.formatNumber(quantity)}</span></div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Setor</div>
@@ -461,7 +492,7 @@ class InventorySystem {
     updateStats() {
         const totalItems = document.getElementById('totalItems');
         if (totalItems) {
-            totalItems.textContent = `Total de itens: ${this.products.length}`;
+            totalItems.textContent = `Total de itens: ${this.formatNumber(this.products.length)}`;
         }
     }
 
@@ -506,42 +537,42 @@ class InventorySystem {
                     <div class="stat-card">
                         <div class="stat-icon">📦</div>
                         <div class="stat-info">
-                            <div class="stat-value">${totalProducts}</div>
+                            <div class="stat-value">${this.formatNumber(totalProducts)}</div>
                             <div class="stat-label">Total de Produtos</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">📊</div>
                         <div class="stat-info">
-                            <div class="stat-value">${totalQuantity}</div>
+                            <div class="stat-value">${this.formatNumber(totalQuantity)}</div>
                             <div class="stat-label">Quantidade Total</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">⚠️</div>
                         <div class="stat-info">
-                            <div class="stat-value">${lowStockProducts}</div>
+                            <div class="stat-value">${this.formatNumber(lowStockProducts)}</div>
                             <div class="stat-label">Estoque Baixo</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">📍</div>
                         <div class="stat-info">
-                            <div class="stat-value">${locations.length}</div>
+                            <div class="stat-value">${this.formatNumber(locations.length)}</div>
                             <div class="stat-label">Setores Diferentes</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">📋</div>
                         <div class="stat-info">
-                            <div class="stat-value">${totalRequisitions}</div>
+                            <div class="stat-value">${this.formatNumber(totalRequisitions)}</div>
                             <div class="stat-label">Total Requisições</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">⏳</div>
                         <div class="stat-info">
-                            <div class="stat-value">${pendingRequisitions}</div>
+                            <div class="stat-value">${this.formatNumber(pendingRequisitions)}</div>
                             <div class="stat-label">Requisições Pendentes</div>
                         </div>
                     </div>
@@ -554,7 +585,7 @@ class InventorySystem {
                             <div class="expiry-status-item conforme">
                                 <div class="expiry-status-icon">✅</div>
                                 <div class="expiry-status-info">
-                                    <div class="expiry-status-count">${expiryAnalysis.conforme}</div>
+                                    <div class="expiry-status-count">${this.formatNumber(expiryAnalysis.conforme)}</div>
                                     <div class="expiry-status-label">Conforme</div>
                                     <div class="expiry-status-desc">Mais de 3 meses</div>
                                 </div>
@@ -562,7 +593,7 @@ class InventorySystem {
                             <div class="expiry-status-item atencao">
                                 <div class="expiry-status-icon">⚠️</div>
                                 <div class="expiry-status-info">
-                                    <div class="expiry-status-count">${expiryAnalysis.atencao}</div>
+                                    <div class="expiry-status-count">${this.formatNumber(expiryAnalysis.atencao)}</div>
                                     <div class="expiry-status-label">Atenção</div>
                                     <div class="expiry-status-desc">Menos de 3 meses</div>
                                 </div>
@@ -570,7 +601,7 @@ class InventorySystem {
                             <div class="expiry-status-item vencido">
                                 <div class="expiry-status-icon">❌</div>
                                 <div class="expiry-status-info">
-                                    <div class="expiry-status-count">${expiryAnalysis.vencido}</div>
+                                    <div class="expiry-status-count">${this.formatNumber(expiryAnalysis.vencido)}</div>
                                     <div class="expiry-status-label">Vencido</div>
                                     <div class="expiry-status-desc">Data expirada</div>
                                 </div>
@@ -587,7 +618,7 @@ class InventorySystem {
                                     <div class="location-progress">
                                         <div class="location-progress-bar" style="width: ${(count / totalProducts) * 100}%"></div>
                                     </div>
-                                    <div class="location-count">${count}</div>
+                                    <div class="location-count">${this.formatNumber(count)}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -599,7 +630,7 @@ class InventorySystem {
                             ${this.products.filter(p => (p.quantity || 0) < 100).slice(0, 5).map(product => `
                                 <div class="low-stock-item">
                                     <div class="product-name">${this.escapeHtml(product.name || '')}</div>
-                                    <div class="product-quantity quantity-low">${product.quantity || 0}</div>
+                                    <div class="product-quantity quantity-low">${this.formatNumber(product.quantity || 0)}</div>
                                 </div>
                             `).join('') || '<p>Nenhum produto com estoque baixo</p>'}
                         </div>
@@ -636,8 +667,22 @@ class InventorySystem {
             return;
         }
 
+        // Valida se todas as quantidades foram preenchidas
+        for (const product of this.selectedProductsForRequisition) {
+            if (!product.requestedQuantity || product.requestedQuantity <= 0) {
+                alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
+                return;
+            }
+            
+            // Valida se a quantidade requisitada não excede o estoque
+            if (product.requestedQuantity > product.availableQuantity) {
+                alert(`Quantidade requisitada (${this.formatNumber(product.requestedQuantity)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
+                return;
+            }
+        }
+
         const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
-            sum + (product.requestedQuantity || 1), 0);
+            sum + (product.requestedQuantity || 0), 0);
 
         const requisition = {
             id: Date.now().toString(),
@@ -647,17 +692,17 @@ class InventorySystem {
                 code: product.code,
                 setor: product.local,
                 requestedQuantity: product.requestedQuantity || 1,
-                availableQuantity: product.quantity,
+                availableQuantity: product.availableQuantity,
                 expiry: product.expiry
             })),
             totalRequested: totalRequested,
             status: 'Pendente',
-            createdAt: new Date().toLocaleDateString("pt-BR"),
+            createdAt: new Date().toISOString(), // Salva como ISO para facilitar ordenação
             createdBy: this.currentUser?.email || 'Sistema'
         };
 
         this.requisitions.push(requisition);
-        this.saveRequisitionToFirestore(requisition);
+        await this.saveRequisitionToFirestore(requisition);
         this.renderRequisitions();
         this.updateDashboard();
 
@@ -666,7 +711,7 @@ class InventorySystem {
         this.updateSelectedProducts();
         this.closeRequisitionModal();
 
-        alert(`Requisição gerada com sucesso! Total requisitado: ${totalRequested} itens.`);
+        alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
     }
 
     renderRequisitions() {
@@ -695,18 +740,18 @@ class InventorySystem {
                     </span>
                 </div>
                 <div class="requisition-meta">
-                    <span class="requisition-date">${requisition.createdAt}</span>
+                    <span class="requisition-date">${this.formatDateTime(requisition.createdAt)}</span>
                     <span class="requisition-user">por ${this.escapeHtml(requisition.createdBy)}</span>
                 </div>
             </div>
             <div class="requisition-details">
                 <div class="requisition-detail">
                     <div class="requisition-detail-label">Total Requisitado</div>
-                    <div class="requisition-detail-value"><strong>${requisition.totalRequested ?? 0} itens</strong></div>
+                    <div class="requisition-detail-value"><strong>${this.formatNumber(requisition.totalRequested ?? 0)} itens</strong></div>
                 </div>
                 <div class="requisition-detail">
                     <div class="requisition-detail-label">Data</div>
-                    <div class="requisition-detail-value">${this.escapeHtml(requisition.createdAt ?? '')}</div>
+                    <div class="requisition-detail-value">${this.formatDateTime(requisition.createdAt)}</div>
                 </div>
             </div>
             <div class="requisition-products">
@@ -721,8 +766,8 @@ class InventorySystem {
                                     <div class="requisition-product-details">
                                         <span>Código: ${this.escapeHtml(product.code ?? '')}</span>
                                         <span>Setor: ${this.escapeHtml(product.setor ?? '')}</span>
-                                        <span>Requisitado: <strong>${product.requestedQuantity}</strong></span>
-                                        <span>Disponível: ${product.availableQuantity}</span>
+                                        <span>Requisitado: <strong>${this.formatNumber(product.requestedQuantity)}</strong></span>
+                                        <span>Disponível: ${this.formatNumber(product.availableQuantity)}</span>
                                         ${product.expiry ? `
                                             <span class="expiry-status ${expiryStatus.class}">
                                                 ${expiryStatus.label}
@@ -738,7 +783,7 @@ class InventorySystem {
                                     </div>
                                 ` : ''}
                                 ${requisition.finalizedQuantitiesPerItem && requisition.finalizedQuantitiesPerItem[product.id] !== undefined ? `
-                                    <span class="supply-quantity-value">Fornecido: ${requisition.finalizedQuantitiesPerItem[product.id]}</span>
+                                    <span class="supply-quantity-value">Fornecido: ${this.formatNumber(requisition.finalizedQuantitiesPerItem[product.id])}</span>
                                 ` : ''}
                             </li>`;
                     }).join('')}
@@ -923,14 +968,16 @@ class InventorySystem {
             
             availableProductsList.innerHTML = filteredProducts.map(product => {
                 const expiryStatus = this.getExpiryStatus(product.expiry);
+                const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
+                
                 return `
-                <div class="available-product-item" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
+                <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
                     <div class="available-product-info">
                         <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
                         <div class="available-product-details">
                             <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
                             <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
-                            <div>Estoque: <strong>${product.quantity ?? 0}</strong></div>
+                            <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
                             <div>Validade: 
                                 ${product.expiry ? `
                                     <span class="expiry-status ${expiryStatus.class}">
@@ -941,7 +988,23 @@ class InventorySystem {
                             </div>
                         </div>
                     </div>
-                    <input type="checkbox" class="product-checkbox" value="${product.id}" ${this.selectedProductsForRequisition.some(p => p.id === product.id) ? 'checked' : ''}>
+                    <div class="product-selection-controls">
+                        <div class="quantity-input-section">
+                            <label>Quantidade:</label>
+                            <input type="number" 
+                                   class="request-quantity-input" 
+                                   data-product-id="${product.id}"
+                                   min="1" 
+                                   max="${product.quantity}"
+                                   value="${isSelected ? this.selectedProductsForRequisition.find(p => p.id === product.id)?.requestedQuantity || 1 : 1}"
+                                   ${isSelected ? '' : 'disabled'}>
+                            <small class="stock-info">Estoque: ${this.formatNumber(product.quantity)}</small>
+                        </div>
+                        <input type="checkbox" 
+                               class="product-checkbox" 
+                               value="${product.id}" 
+                               ${isSelected ? 'checked' : ''}>
+                    </div>
                 </div>
             `;
             }).join('');
@@ -951,11 +1014,29 @@ class InventorySystem {
                 checkbox.addEventListener('change', (e) => {
                     const productId = e.target.value;
                     const productItem = e.target.closest('.available-product-item');
+                    const quantityInput = productItem.querySelector('.request-quantity-input');
                     
                     if (e.target.checked) {
                         productItem.classList.add('selected');
+                        quantityInput.disabled = false;
+                        quantityInput.focus();
                     } else {
                         productItem.classList.remove('selected');
+                        quantityInput.disabled = true;
+                    }
+                });
+            });
+
+            // Adicionar event listeners para os inputs de quantidade
+            availableProductsList.querySelectorAll('.request-quantity-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const productId = e.target.dataset.productId;
+                    const quantity = parseInt(e.target.value);
+                    const maxQuantity = parseInt(e.target.max);
+                    
+                    if (quantity > maxQuantity) {
+                        alert(`Quantidade não pode exceder o estoque disponível: ${this.formatNumber(maxQuantity)}`);
+                        e.target.value = maxQuantity;
                     }
                 });
             });
@@ -987,13 +1068,21 @@ class InventorySystem {
         
         selectedCheckboxes.forEach(checkbox => {
             const productId = checkbox.value;
+            const productItem = checkbox.closest('.available-product-item');
+            const quantityInput = productItem.querySelector('.request-quantity-input');
             const product = this.products.find(p => p.id === productId);
-            if (product) {
+            
+            if (product && quantityInput) {
+                const requestedQuantity = parseInt(quantityInput.value) || 1;
+                
                 this.selectedProductsForRequisition.push({
                     id: product.id,
                     name: product.name,
                     code: product.code,
-                    quantity: 1 // Quantidade padrão
+                    local: product.local,
+                    availableQuantity: product.quantity,
+                    requestedQuantity: requestedQuantity,
+                    expiry: product.expiry
                 });
             }
         });
@@ -1002,42 +1091,45 @@ class InventorySystem {
         this.closeProductSelectionModal();
     }
 
-    updateSelectedProducts() {
-        const selectedProductsDiv = document.getElementById('selectedProducts');
+    updateSelectedProductsDisplay() {
+        const selectedProductsDiv = document.getElementById("selectedProducts");
         if (selectedProductsDiv) {
             if (this.selectedProductsForRequisition.length === 0) {
-                selectedProductsDiv.innerHTML = '<p>Nenhum produto selecionado</p>';
+                selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
             } else {
-                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(product => {
-                    const expiryStatus = this.getExpiryStatus(product.expiry);
+                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => {
+                    const expiryStatus = this.getExpiryStatus(item.expiry);
                     return `
-                    <div class="selected-product-item-detailed">
-                        <div class="selected-product-info-detailed">
-                            <div class="selected-product-name-detailed">${this.escapeHtml(product.name)}</div>
-                            <div class="selected-product-details">
-                                <div>Código: ${this.escapeHtml(product.code)}</div>
-                                <div>Setor: ${this.escapeHtml(product.local)}</div>
-                                <div>Validade: 
-                                    ${product.expiry ? `
-                                        <span class="expiry-status ${expiryStatus.class}">
-                                            ${expiryStatus.label}
-                                        </span>
-                                        <small>(${new Date(product.expiry).toLocaleDateString('pt-BR')})</small>
-                                    ` : '<span class="text-muted">Não informado</span>'}
+                        <div class="selected-product-item-detailed">
+                            <div class="selected-product-info-detailed">
+                                <div class="selected-product-name-detailed">${this.escapeHtml(item.name)}</div>
+                                <div class="selected-product-details">
+                                    <div>Código: ${this.escapeHtml(item.code)}</div>
+                                    <div>Setor: ${this.escapeHtml(item.local)}</div>
+                                    <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
+                                    <div>Validade: 
+                                        ${item.expiry ? `
+                                            <span class="expiry-status ${expiryStatus.class}">
+                                                ${expiryStatus.label}
+                                            </span>
+                                            <small>(${new Date(item.expiry).toLocaleDateString('pt-BR')})</small>
+                                        ` : '<span class="text-muted">Não informado</span>'}
+                                    </div>
                                 </div>
                             </div>
+                            <div class="selected-product-quantity-detailed">
+                                <div class="quantity-label">Quantidade a Requisitar</div>
+                                <input type="number" 
+                                       class="quantity-input-detailed" 
+                                       value="${item.requestedQuantity || 1}" 
+                                       min="1" 
+                                       max="${item.availableQuantity}"
+                                       data-product-id="${item.id}">
+                                <small class="stock-info">Máx: ${this.formatNumber(item.availableQuantity)}</small>
+                            </div>
+                            <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${item.id}')">Remover</button>
                         </div>
-                        <div class="selected-product-stock">
-                            <div class="stock-label">Estoque</div>
-                            <div class="stock-value">${product.quantity}</div>
-                        </div>
-                        <div class="selected-product-quantity-detailed">
-                            <div class="quantity-label">Requisitar</div>
-                            <input type="number" class="quantity-input-detailed" value="${product.requestedQuantity || 1}" min="1" max="${product.quantity}" data-product-id="${product.id}">
-                        </div>
-                        <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${product.id}')">Remover</button>
-                    </div>
-                `;
+                    `;
                 }).join('');
 
                 // Adicionar event listeners para os inputs de quantidade
@@ -1045,11 +1137,32 @@ class InventorySystem {
                     input.addEventListener('change', (e) => {
                         const productId = e.target.dataset.productId;
                         const quantity = parseInt(e.target.value);
-                        this.updateProductQuantity(productId, quantity);
+                        const maxQuantity = parseInt(e.target.max);
+                        
+                        if (quantity > maxQuantity) {
+                            alert(`Quantidade não pode exceder o estoque disponível: ${this.formatNumber(maxQuantity)}`);
+                            e.target.value = maxQuantity;
+                            this.updateProductQuantity(productId, maxQuantity);
+                        } else {
+                            this.updateProductQuantity(productId, quantity);
+                        }
                     });
                 });
             }
         }
+    }
+
+    // Método auxiliar para atualizar quantidade
+    updateProductQuantity(productId, quantity) {
+        const productIndex = this.selectedProductsForRequisition.findIndex(p => p.id === productId);
+        if (productIndex !== -1) {
+            this.selectedProductsForRequisition[productIndex].requestedQuantity = quantity;
+        }
+    }
+
+    removeSelectedProduct(productId) {
+        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(p => p.id !== productId);
+        this.updateSelectedProductsDisplay();
     }
 
     // ===================== User Management =====================
@@ -1378,33 +1491,6 @@ class InventorySystem {
             requisitionModal.classList.add('active');
             modalOverlay.classList.add('active');
         }
-    }
-
-    updateSelectedProductsDisplay() {
-        const selectedProductsDiv = document.getElementById("selectedProducts");
-        if (selectedProductsDiv) {
-            if (this.selectedProductsForRequisition.length === 0) {
-                selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
-            } else {
-                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => `
-                    <div class="selected-product-item">
-                        <span>${this.escapeHtml(item.name)} (${item.quantity} ${item.unit})</span>
-                        <button type="button" class="remove-selected-product" data-id="${item.id}">&times;</button>
-                    </div>
-                `).join("");
-                selectedProductsDiv.querySelectorAll(".remove-selected-product").forEach(button => {
-                    button.addEventListener("click", (event) => {
-                        const productId = event.target.dataset.id;
-                        this.removeProductFromRequisitionSelection(productId);
-                    });
-                });
-            }
-        }
-    }
-
-    removeProductFromRequisitionSelection(productId) {
-        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(item => item.id !== productId);
-        this.updateSelectedProductsDisplay();
     }
 
     closeRequisitionModal() {
