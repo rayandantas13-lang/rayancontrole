@@ -1,7 +1,3 @@
-// inventory-system-complete.js
-// Sistema de Almoxarifado - Código Completo Atualizado
-// Data: 10/10/2025
-
 // Importar módulos do Firebase v9
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
@@ -222,8 +218,31 @@ class InventorySystem {
 
     async saveRequisitionToFirestore(requisition) {
         try {
-            await setDoc(doc(db, "requisitions", requisition.id), requisition);
-            console.log("Requisição salva no Firestore:", requisition.id);
+            // Limpar objeto antes de salvar
+            const cleanRequisition = JSON.parse(JSON.stringify(requisition));
+            
+            // Remover campos undefined/null
+            Object.keys(cleanRequisition).forEach(key => {
+                if (cleanRequisition[key] === undefined || cleanRequisition[key] === null) {
+                    delete cleanRequisition[key];
+                }
+            });
+            
+            // Limpar produtos também
+            if (cleanRequisition.products) {
+                cleanRequisition.products = cleanRequisition.products.map(product => {
+                    const cleanProduct = { ...product };
+                    Object.keys(cleanProduct).forEach(key => {
+                        if (cleanProduct[key] === undefined || cleanProduct[key] === null) {
+                            delete cleanProduct[key];
+                        }
+                    });
+                    return cleanProduct;
+                });
+            }
+
+            await setDoc(doc(db, "requisitions", cleanRequisition.id), cleanRequisition);
+            console.log("Requisição salva no Firestore:", cleanRequisition.id);
             return true;
         } catch (error) {
             console.error("Erro ao salvar requisição no Firestore:", error);
@@ -688,18 +707,28 @@ class InventorySystem {
             id: Date.now().toString(),
             products: this.selectedProductsForRequisition.map(product => ({
                 id: product.id,
-                name: product.name,
-                code: product.code,
-                setor: product.local,
+                name: product.name || '',
+                code: product.code || '',
+                setor: product.local || '',
                 requestedQuantity: product.requestedQuantity || 1,
-                availableQuantity: product.availableQuantity,
-                expiry: product.expiry
+                availableQuantity: product.availableQuantity || 0,
+                expiry: product.expiry || null
             })),
             totalRequested: totalRequested,
             status: 'Pendente',
-            createdAt: new Date().toISOString(), // Salva como ISO para facilitar ordenação
-            createdBy: this.currentUser?.email || 'Sistema'
+            createdAt: new Date().toISOString(),
+            createdBy: this.currentUser?.email || 'Sistema',
+            // Garantir que todos os campos opcionais tenham valores padrão
+            description: document.getElementById('requisitionDescription')?.value || '',
+            local: document.getElementById('requisitionLocal')?.value || ''
         };
+
+        // Remover campos undefined explicitamente
+        Object.keys(requisition).forEach(key => {
+            if (requisition[key] === undefined) {
+                delete requisition[key];
+            }
+        });
 
         this.requisitions.push(requisition);
         await this.saveRequisitionToFirestore(requisition);
@@ -708,7 +737,7 @@ class InventorySystem {
 
         // Limpar seleção
         this.selectedProductsForRequisition = [];
-        this.updateSelectedProducts();
+        this.updateSelectedProductsDisplay();
         this.closeRequisitionModal();
 
         alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
@@ -886,7 +915,10 @@ class InventorySystem {
                 id: p.id,
                 name: p.name,
                 code: p.code,
-                quantity: p.quantity
+                local: p.setor,
+                availableQuantity: p.availableQuantity,
+                requestedQuantity: p.requestedQuantity,
+                expiry: p.expiry
             }));
             this.updateSelectedProductsDisplay();
             
@@ -921,9 +953,12 @@ class InventorySystem {
                 id: p.id,
                 name: p.name,
                 code: p.code,
-                quantity: p.quantity
+                setor: p.local,
+                requestedQuantity: p.requestedQuantity,
+                availableQuantity: p.availableQuantity,
+                expiry: p.expiry
             }));
-            existingRequisition.totalItems = this.selectedProductsForRequisition.length;
+            existingRequisition.totalRequested = this.selectedProductsForRequisition.reduce((sum, p) => sum + (p.requestedQuantity || 0), 0);
 
             await this.saveRequisitionToFirestore(existingRequisition);
             this.renderRequisitions();
