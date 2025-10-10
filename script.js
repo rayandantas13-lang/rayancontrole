@@ -280,6 +280,7 @@ class InventorySystem {
             quantity: parseFloat(productData.quantity),
             local: productData.local,
             description: productData.description || '',
+            expiry: productData.expiry || '',
             lastUpdated: new Date().toLocaleDateString("pt-BR")
         };
 
@@ -301,6 +302,7 @@ class InventorySystem {
                 quantity: parseFloat(productData.quantity),
                 local: productData.local,
                 description: productData.description || '',
+                expiry: productData.expiry || '',
                 lastUpdated: new Date().toLocaleDateString("pt-BR")
             };
             this.saveToFirestore(this.products[index]);
@@ -318,6 +320,23 @@ class InventorySystem {
         this.updateStats();
         this.updateDashboard();
         this.populateLocationFilter();
+    }
+
+    getExpiryStatus(expiryDate) {
+        if (!expiryDate) return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
+        
+        const today = new Date();
+        const expiry = new Date(expiryDate);
+        const diffTime = expiry - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+            return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
+        } else if (diffDays <= 90) { // 3 meses = ~90 dias
+            return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
+        } else {
+            return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
+        }
     }
 
     render() {
@@ -347,6 +366,7 @@ class InventorySystem {
         const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         const quantity = product.quantity ?? 0;
         const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
+        const expiryStatus = this.getExpiryStatus(product.expiry);
         
         return `
         <div class="product-item" data-id="${product.id}">
@@ -368,8 +388,20 @@ class InventorySystem {
                     <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${quantity}</span></div>
                 </div>
                 <div class="product-detail">
-                    <div class="product-detail-label">Local</div>
+                    <div class="product-detail-label">Setor</div>
                     <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
+                </div>
+                <div class="product-detail">
+                    <div class="product-detail-label">Validade</div>
+                    <div class="product-detail-value">
+                        ${product.expiry ? `
+                            <span class="expiry-status ${expiryStatus.class}">
+                                ${expiryStatus.label}
+                            </span>
+                            <br>
+                            <small>${new Date(product.expiry).toLocaleDateString('pt-BR')}</small>
+                        ` : '<span class="text-muted">Não informado</span>'}
+                    </div>
                 </div>
                 <div class="product-detail">
                     <div class="product-detail-label">Última Atualização</div>
@@ -443,10 +475,28 @@ class InventorySystem {
             const totalRequisitions = this.requisitions.length;
             const pendingRequisitions = this.requisitions.filter(r => r.status === 'Pendente').length;
             
-            // Produtos por local
+            // Análise de validade dos produtos
+            const expiryAnalysis = {
+                conforme: 0,
+                atencao: 0,
+                vencido: 0,
+                semData: 0
+            };
+            
+            this.products.forEach(product => {
+                const status = this.getExpiryStatus(product.expiry);
+                switch (status.status) {
+                    case 'conforme': expiryAnalysis.conforme++; break;
+                    case 'atencao': expiryAnalysis.atencao++; break;
+                    case 'vencido': expiryAnalysis.vencido++; break;
+                    default: expiryAnalysis.semData++; break;
+                }
+            });
+            
+            // Produtos por setor
             const productsByLocation = {};
             this.products.forEach(product => {
-                const location = product.local || 'Sem local';
+                const location = product.local || 'Sem setor';
                 productsByLocation[location] = (productsByLocation[location] || 0) + 1;
             });
             
@@ -478,7 +528,7 @@ class InventorySystem {
                         <div class="stat-icon">📍</div>
                         <div class="stat-info">
                             <div class="stat-value">${locations.length}</div>
-                            <div class="stat-label">Locais Diferentes</div>
+                            <div class="stat-label">Setores Diferentes</div>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -499,7 +549,37 @@ class InventorySystem {
                 
                 <div class="dashboard-charts">
                     <div class="chart-container">
-                        <h3>Produtos por Local</h3>
+                        <h3>Status de Validade dos Produtos</h3>
+                        <div class="expiry-status-chart">
+                            <div class="expiry-status-item conforme">
+                                <div class="expiry-status-icon">✅</div>
+                                <div class="expiry-status-info">
+                                    <div class="expiry-status-count">${expiryAnalysis.conforme}</div>
+                                    <div class="expiry-status-label">Conforme</div>
+                                    <div class="expiry-status-desc">Mais de 3 meses</div>
+                                </div>
+                            </div>
+                            <div class="expiry-status-item atencao">
+                                <div class="expiry-status-icon">⚠️</div>
+                                <div class="expiry-status-info">
+                                    <div class="expiry-status-count">${expiryAnalysis.atencao}</div>
+                                    <div class="expiry-status-label">Atenção</div>
+                                    <div class="expiry-status-desc">Menos de 3 meses</div>
+                                </div>
+                            </div>
+                            <div class="expiry-status-item vencido">
+                                <div class="expiry-status-icon">❌</div>
+                                <div class="expiry-status-info">
+                                    <div class="expiry-status-count">${expiryAnalysis.vencido}</div>
+                                    <div class="expiry-status-label">Vencido</div>
+                                    <div class="expiry-status-desc">Data expirada</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <h3>Produtos por Setor</h3>
                         <div class="location-chart">
                             ${Object.entries(productsByLocation).map(([location, count]) => `
                                 <div class="location-bar">
@@ -550,40 +630,43 @@ class InventorySystem {
     // ===================== Requisition Management =====================
     async generateRequisition(event) {
         event.preventDefault();
-        const form = event.target;
-        const local = form.requisitionLocal.value;
-        const description = form.requisitionDescription ? form.requisitionDescription.value : '';
-        const estimatedQuantity = form.estimatedQuantity ? parseInt(form.estimatedQuantity.value, 10) : 0;
-
+        
         if (this.selectedProductsForRequisition.length === 0) {
-            alert("Por favor, selecione pelo menos um produto.");
+            alert('Selecione pelo menos um produto para a requisição.');
             return;
         }
 
+        const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
+            sum + (product.requestedQuantity || 1), 0);
+
         const requisition = {
-            id: `REQ-${Date.now()}`,
-            number: this.nextRequisitionNumber++,
-            local: local,
-            description: description,
-            estimatedQuantity: estimatedQuantity,
-            products: this.selectedProductsForRequisition.map(p => ({
-                id: p.id,
-                name: p.name,
-                code: p.code,
-                quantity: p.quantity
+            id: Date.now().toString(),
+            products: this.selectedProductsForRequisition.map(product => ({
+                id: product.id,
+                name: product.name,
+                code: product.code,
+                setor: product.local,
+                requestedQuantity: product.requestedQuantity || 1,
+                availableQuantity: product.quantity,
+                expiry: product.expiry
             })),
-            totalItems: this.selectedProductsForRequisition.length,
+            totalRequested: totalRequested,
             status: 'Pendente',
             createdAt: new Date().toLocaleDateString("pt-BR"),
-            createdBy: this.currentUser ? this.currentUser.email : 'Unknown'
+            createdBy: this.currentUser?.email || 'Sistema'
         };
 
         this.requisitions.push(requisition);
-        await this.saveRequisitionToFirestore(requisition);
-        this.selectedProductsForRequisition = [];
-        this.closeRequisitionModal();
+        this.saveRequisitionToFirestore(requisition);
         this.renderRequisitions();
-        alert("Requisição gerada com sucesso!");
+        this.updateDashboard();
+
+        // Limpar seleção
+        this.selectedProductsForRequisition = [];
+        this.updateSelectedProducts();
+        this.closeRequisitionModal();
+
+        alert(`Requisição gerada com sucesso! Total requisitado: ${totalRequested} itens.`);
     }
 
     renderRequisitions() {
@@ -606,48 +689,46 @@ class InventorySystem {
         <div class="requisition-item" data-id="${requisition.id}">
             <div class="requisition-header">
                 <div class="requisition-info">
-                    <h3>Requisição #${requisition.number}</h3>
-                    <span class="requisition-number">ID: ${requisition.id}</span>
+                    <h3>Requisição #${requisition.id}</h3>
+                    <span class="requisition-status status-${requisition.status.toLowerCase().replace('ê', 'e')}">
+                        ${requisition.status}
+                    </span>
                 </div>
-                <div class="requisition-status status-${requisition.status.toLowerCase().replace('ê', 'e')}">
-                    ${requisition.status}
+                <div class="requisition-meta">
+                    <span class="requisition-date">${requisition.createdAt}</span>
+                    <span class="requisition-user">por ${this.escapeHtml(requisition.createdBy)}</span>
                 </div>
             </div>
             <div class="requisition-details">
                 <div class="requisition-detail">
-                    <div class="requisition-detail-label">Local</div>
-                    <div class="requisition-detail-value">${this.escapeHtml(requisition.local ?? '')}</div>
+                    <div class="requisition-detail-label">Total Requisitado</div>
+                    <div class="requisition-detail-value"><strong>${requisition.totalRequested ?? 0} itens</strong></div>
                 </div>
                 <div class="requisition-detail">
                     <div class="requisition-detail-label">Data</div>
                     <div class="requisition-detail-value">${this.escapeHtml(requisition.createdAt ?? '')}</div>
                 </div>
-                <div class="requisition-detail">
-                    <div class="requisition-detail-label">Total de Itens</div>
-                    <div class="requisition-detail-value">${requisition.totalItems}</div>
-                </div>
-                ${requisition.description ? `
-                <div class="requisition-detail">
-                    <div class="requisition-detail-label">Descrição</div>
-                    <div class="requisition-detail-value">${this.escapeHtml(requisition.description)}</div>
-                </div>
-                ` : ''}
-                ${requisition.estimatedQuantity ? `
-                <div class="requisition-detail">
-                    <div class="requisition-detail-label">Quantidade Estimada</div>
-                    <div class="requisition-detail-value">${requisition.estimatedQuantity}</div>
-                </div>
-                ` : ''}
             </div>
             <div class="requisition-products">
-                <h4>Produtos Requisitados</h4>
+                <h4>Produtos Requisitados (${requisition.products?.length ?? 0})</h4>
                 <ul class="requisition-products-list">
-                    ${requisition.products.map(product => {
+                    ${(requisition.products ?? []).map(product => {
+                        const expiryStatus = this.getExpiryStatus(product.expiry);
                         return `
                             <li class="requisition-product-item">
                                 <div class="requisition-product-info">
                                     <span class="requisition-product-name">${this.escapeHtml(product.name ?? '')}</span>
-                                    <span class="requisition-product-quantity">Código: ${this.escapeHtml(product.code ?? '')}</span>
+                                    <div class="requisition-product-details">
+                                        <span>Código: ${this.escapeHtml(product.code ?? '')}</span>
+                                        <span>Setor: ${this.escapeHtml(product.setor ?? '')}</span>
+                                        <span>Requisitado: <strong>${product.requestedQuantity}</strong></span>
+                                        <span>Disponível: ${product.availableQuantity}</span>
+                                        ${product.expiry ? `
+                                            <span class="expiry-status ${expiryStatus.class}">
+                                                ${expiryStatus.label}
+                                            </span>
+                                        ` : ''}
+                                    </div>
                                 </div>
                                 ${isAdmOrSubAdm && isPending ? `
                                     <div class="supply-quantity-section">
@@ -840,15 +921,30 @@ class InventorySystem {
                 this.products.filter(product => product.local === selectedLocation) : 
                 this.products;
             
-            availableProductsList.innerHTML = filteredProducts.map(product => `
+            availableProductsList.innerHTML = filteredProducts.map(product => {
+                const expiryStatus = this.getExpiryStatus(product.expiry);
+                return `
                 <div class="available-product-item" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
                     <div class="available-product-info">
                         <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
-                        <div class="available-product-details">Código: ${this.escapeHtml(product.code ?? '')} | Local: ${this.escapeHtml(product.local ?? '')} | Estoque: ${product.quantity ?? 0}</div>
+                        <div class="available-product-details">
+                            <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
+                            <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
+                            <div>Estoque: <strong>${product.quantity ?? 0}</strong></div>
+                            <div>Validade: 
+                                ${product.expiry ? `
+                                    <span class="expiry-status ${expiryStatus.class}">
+                                        ${expiryStatus.label}
+                                    </span>
+                                    <small>(${new Date(product.expiry).toLocaleDateString('pt-BR')})</small>
+                                ` : '<span class="text-muted">Não informado</span>'}
+                            </div>
+                        </div>
                     </div>
                     <input type="checkbox" class="product-checkbox" value="${product.id}" ${this.selectedProductsForRequisition.some(p => p.id === product.id) ? 'checked' : ''}>
                 </div>
-            `).join('');
+            `;
+            }).join('');
 
             // Adicionar event listeners para os checkboxes
             availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
@@ -872,11 +968,14 @@ class InventorySystem {
             const locations = [...new Set(this.products.map(p => p.local).filter(Boolean))];
             const currentValue = locationFilter.value;
             
-            locationFilter.innerHTML = '<option value="">Todos os locais</option>' +
+            locationFilter.innerHTML = '<option value="">Todos os setores</option>' +
                 locations.map(location => `<option value="${this.escapeHtml(location)}" ${currentValue === location ? 'selected' : ''}>${this.escapeHtml(location)}</option>`).join('');
             
-            // Adicionar event listener para o filtro de local
-            locationFilter.addEventListener('change', () => {
+            // Remover event listeners anteriores e adicionar novo
+            const newLocationFilter = locationFilter.cloneNode(true);
+            locationFilter.parentNode.replaceChild(newLocationFilter, locationFilter);
+            
+            newLocationFilter.addEventListener('change', () => {
                 this.populateAvailableProducts();
             });
         }
@@ -903,39 +1002,54 @@ class InventorySystem {
         this.closeProductSelectionModal();
     }
 
-    updateSelectedProductsDisplay() {
-        const selectedProducts = document.getElementById('selectedProducts');
-        if (selectedProducts) {
+    updateSelectedProducts() {
+        const selectedProductsDiv = document.getElementById('selectedProducts');
+        if (selectedProductsDiv) {
             if (this.selectedProductsForRequisition.length === 0) {
-                selectedProducts.innerHTML = '<p>Nenhum produto selecionado</p>';
-                selectedProducts.classList.remove('has-products');
+                selectedProductsDiv.innerHTML = '<p>Nenhum produto selecionado</p>';
             } else {
-                selectedProducts.innerHTML = this.selectedProductsForRequisition.map((product, index) => `
-                    <div class="selected-product-item">
-                        <div class="selected-product-info">
-                            <div class="selected-product-name">${this.escapeHtml(product.name ?? '')}</div>
-                            <div class="selected-product-code">Código: ${this.escapeHtml(product.code ?? '')}</div>
+                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(product => {
+                    const expiryStatus = this.getExpiryStatus(product.expiry);
+                    return `
+                    <div class="selected-product-item-detailed">
+                        <div class="selected-product-info-detailed">
+                            <div class="selected-product-name-detailed">${this.escapeHtml(product.name)}</div>
+                            <div class="selected-product-details">
+                                <div>Código: ${this.escapeHtml(product.code)}</div>
+                                <div>Setor: ${this.escapeHtml(product.local)}</div>
+                                <div>Validade: 
+                                    ${product.expiry ? `
+                                        <span class="expiry-status ${expiryStatus.class}">
+                                            ${expiryStatus.label}
+                                        </span>
+                                        <small>(${new Date(product.expiry).toLocaleDateString('pt-BR')})</small>
+                                    ` : '<span class="text-muted">Não informado</span>'}
+                                </div>
+                            </div>
                         </div>
-                        <div class="selected-product-quantity">
-                            <input type="number" value="${product.quantity}" min="1" onchange="window.inventorySystem.updateSelectedProductQuantity(${index}, this.value)">
+                        <div class="selected-product-stock">
+                            <div class="stock-label">Estoque</div>
+                            <div class="stock-value">${product.quantity}</div>
                         </div>
-                        <button type="button" class="remove-product-btn" onclick="window.inventorySystem.removeSelectedProduct(${index})">Remover</button>
+                        <div class="selected-product-quantity-detailed">
+                            <div class="quantity-label">Requisitar</div>
+                            <input type="number" class="quantity-input-detailed" value="${product.requestedQuantity || 1}" min="1" max="${product.quantity}" data-product-id="${product.id}">
+                        </div>
+                        <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${product.id}')">Remover</button>
                     </div>
-                `).join('');
-                selectedProducts.classList.add('has-products');
+                `;
+                }).join('');
+
+                // Adicionar event listeners para os inputs de quantidade
+                selectedProductsDiv.querySelectorAll('.quantity-input-detailed').forEach(input => {
+                    input.addEventListener('change', (e) => {
+                        const productId = e.target.dataset.productId;
+                        const quantity = parseInt(e.target.value);
+                        this.updateProductQuantity(productId, quantity);
+                    });
+                });
             }
         }
-    }
-
-    updateSelectedProductQuantity(index, quantity) {
-        if (this.selectedProductsForRequisition[index]) {
-            this.selectedProductsForRequisition[index].quantity = parseInt(quantity, 10) || 1;
-        }
-    }
-
-    removeSelectedProduct(index) {
-        this.selectedProductsForRequisition.splice(index, 1);
-        this.updateSelectedProductsDisplay();
     }
 
     // ===================== User Management =====================
@@ -1129,9 +1243,9 @@ class InventorySystem {
             }
         });
 
-        // Filter by Location
-        const locationFilter = document.getElementById('locationFilter');
-        if (locationFilter) locationFilter.addEventListener('change', () => this.render());
+        // Filter by Location (apenas para a página principal)
+        const mainLocationFilter = document.querySelector('#productsTab #locationFilter');
+        if (mainLocationFilter) mainLocationFilter.addEventListener('change', () => this.render());
 
         // Product search in selection modal
         const productSearchInput = document.getElementById('productSearchInput');
