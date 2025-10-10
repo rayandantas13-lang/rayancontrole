@@ -1,39 +1,3 @@
-// Anti-debugging protection
-(function() {
-    var debug = false;
-    
-    // Detectar console aberto
-    var element = new Image();
-    Object.defineProperty(element, 'id', {
-        get: function() {
-            debug = true;
-            console.log('Debugging detected!');
-            window.location.href = '/error.html';
-        }
-    });
-    
-    console.log('%c', element);
-    
-    // Prevenir F12
-    document.onkeydown = function(e) {
-        if (e.keyCode == 123) { // F12
-            return false;
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 73) { // Ctrl+Shift+I
-            return false;
-        }
-        if (e.ctrlKey && e.keyCode == 85) { // Ctrl+U
-            return false;
-        }
-    };
-    
-    // Prevenir clique direito
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        return false;
-    });
-})();
-
 // Importar módulos do Firebase v9
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
