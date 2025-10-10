@@ -324,7 +324,7 @@ class InventorySystem {
     // ===================== Product Management =====================
     addProduct(productData) {
         const product = {
-            id: productData.code, // Usar o código como ID para simplificar
+            id: productData.code,
             name: productData.name,
             code: productData.code,
             quantity: parseFloat(productData.quantity),
@@ -1344,7 +1344,8 @@ class InventorySystem {
                     code: e.target.productCode.value,
                     quantity: e.target.productQuantity.value,
                     local: e.target.productLocation.value,
-                    description: e.target.productDescription.value
+                    description: e.target.productDescription.value,
+                    expiry: e.target.productExpiry ? e.target.productExpiry.value : '' // CAPTURAR VALIDADE
                 };
                 if (productId) {
                     this.editProduct(productId, productData);
@@ -1484,6 +1485,14 @@ class InventorySystem {
             
             const productDescriptionInput = document.getElementById('productDescription');
             if (productDescriptionInput) productDescriptionInput.value = product.description ?? '';
+            
+            // PREENCHER CAMPO DE VALIDADE
+            const productExpiryInput = document.getElementById('productExpiry');
+            if (productExpiryInput && product.expiry) {
+                // Formatar a data para o input type="date" (YYYY-MM-DD)
+                const expiryDate = new Date(product.expiry);
+                productExpiryInput.value = expiryDate.toISOString().split('T')[0];
+            }
             
             const modalTitle = document.getElementById('modalTitle');
             if (modalTitle) modalTitle.textContent = 'Editar Produto';
