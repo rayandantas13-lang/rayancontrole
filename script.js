@@ -1380,12 +1380,39 @@ class InventorySystem {
         }
     }
 
+    updateSelectedProductsDisplay() {
+        const selectedProductsDiv = document.getElementById("selectedProducts");
+        if (selectedProductsDiv) {
+            if (this.selectedProductsForRequisition.length === 0) {
+                selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
+            } else {
+                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => `
+                    <div class="selected-product-item">
+                        <span>${this.escapeHtml(item.name)} (${item.quantity} ${item.unit})</span>
+                        <button type="button" class="remove-selected-product" data-id="${item.id}">&times;</button>
+                    </div>
+                `).join("");
+                selectedProductsDiv.querySelectorAll(".remove-selected-product").forEach(button => {
+                    button.addEventListener("click", (event) => {
+                        const productId = event.target.dataset.id;
+                        this.removeProductFromRequisitionSelection(productId);
+                    });
+                });
+            }
+        }
+    }
+
+    removeProductFromRequisitionSelection(productId) {
+        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(item => item.id !== productId);
+        this.updateSelectedProductsDisplay();
+    }
+
     closeRequisitionModal() {
-        const requisitionModal = document.getElementById('requisitionModal');
-        const modalOverlay = document.getElementById('modalOverlay');
+        const requisitionModal = document.getElementById("requisitionModal");
+        const modalOverlay = document.getElementById("modalOverlay");
         
-        if (requisitionModal) requisitionModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
+        if (requisitionModal) requisitionModal.classList.remove("active");
+        if (modalOverlay) modalOverlay.classList.remove("active");
         
         this.selectedProductsForRequisition = [];
         this.updateSelectedProductsDisplay();
