@@ -138,8 +138,12 @@
                     <input type="number" id="productQuantity" name="productQuantity" placeholder="Quantidade" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="productLocation">Local (Setor/Prateleira) *</label>
+                    <label for="productLocation">Setor (Setor/Prateleira) *</label>
                     <input type="text" id="productLocation" name="productLocation" required>
+                </div>
+                <div class="form-group">
+                    <label for="productExpiry">Data de Validade</label>
+                    <input type="date" id="productExpiry" name="productExpiry">
                 </div>
                 <div class="form-group">
                     <label for="productDescription">Descrição (Opcional)</label>
@@ -173,27 +177,15 @@
 
     <!-- Modal para gerar nova requisição -->
     <div id="requisitionModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content large-modal">
             <div class="modal-header">
                 <h3 id="requisitionModalTitle">Gerar Nova Requisição</h3>
                 <button type="button" id="closeRequisitionModal" class="close-btn">&times;</button>
             </div>
             <form id="requisitionForm">
                 <div class="form-group">
-                    <label for="requisitionLocal">Local *</label>
-                    <input type="text" id="requisitionLocal" name="requisitionLocal" required>
-                </div>
-                <div class="form-group">
-                    <label for="requisitionDescription">Descrição *</label>
-                    <input type="text" id="requisitionDescription" name="requisitionDescription" required>
-                </div>
-                <div class="form-group">
-                    <label for="estimatedQuantity">Quantidade Estimada *</label>
-                    <input type="number" id="estimatedQuantity" name="estimatedQuantity" placeholder="Quantidade estimada total" min="1" required>
-                </div>
-                <div class="form-group">
                     <label>Produtos Requisitados</label>
-                    <div id="selectedProducts" class="selected-products">
+                    <div id="selectedProducts" class="selected-products expanded">
                         <p>Nenhum produto selecionado</p>
                     </div>
                     <button type="button" id="selectProductsBtn" class="btn-secondary">Selecionar Produtos</button>
@@ -217,7 +209,7 @@
                 <div class="search-container">
                     <input type="text" id="productSearchInput" placeholder="Buscar produtos...">
                     <select id="locationFilter" class="location-filter">
-                        <option value="">Todos os locais</option>
+                        <option value="">Todos os setores</option>
                     </select>
                 </div>
                 <div id="availableProductsList" class="available-products-list">
