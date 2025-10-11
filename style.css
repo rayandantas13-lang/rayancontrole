@@ -749,6 +749,8 @@ form {
     border-top: 2px solid var(--border-color);
     margin-top: var(--spacing-xl);
 }
+    
+}
 
 /* Seleção de produtos - Design melhorado */
 .selected-products {
