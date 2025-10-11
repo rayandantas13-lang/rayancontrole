@@ -744,7 +744,7 @@ form {
 .form-actions {
     display: flex;
     gap: var(--spacing-lg);
-    justify-content: center;
+    justify-content: flex-end;
     padding-top: var(--spacing-xl);
     border-top: 2px solid var(--border-color);
     margin-top: var(--spacing-xl);
