@@ -1266,358 +1266,6 @@ class InventorySystem {
         </div>`;
     }
 
-    // ===================== Report Management =====================
-    openReportModal() {
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal && modalOverlay) {
-            // Reset form
-            const reportForm = document.getElementById('reportForm');
-            if (reportForm) reportForm.reset();
-            
-            // Set default dates
-            const today = new Date();
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setMonth(today.getMonth() - 1);
-            
-            document.getElementById('startDate').value = oneMonthAgo.toISOString().split('T')[0];
-            document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            
-            reportModal.classList.add('active');
-            modalOverlay.classList.add('active');
-        }
-    }
-
-    closeReportModal() {
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal) reportModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    async generateReport(event) {
-        event.preventDefault();
-        
-        const reportType = document.getElementById('reportType').value;
-        const periodType = document.getElementById('periodType').value;
-        const reportFormat = document.querySelector('input[name="reportFormat"]:checked').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        
-        if (!reportType || !periodType) {
-            alert('Por favor, preencha todos os campos obrigatórios.');
-            return;
-        }
-        
-        if (periodType === 'custom' && (!startDate || !endDate)) {
-            alert('Por favor, selecione o período personalizado.');
-            return;
-        }
-        
-        try {
-            // Mostrar loading
-            const generateBtn = document.getElementById('generateReportBtn');
-            const originalText = generateBtn.innerHTML;
-            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
-            generateBtn.disabled = true;
-            
-            let reportData;
-            let fileName;
-            
-            if (reportType === 'estoque') {
-                reportData = await this.generateStockReport(periodType, startDate, endDate);
-                fileName = `relatorio_estoque_${new Date().toISOString().split('T')[0]}`;
-            } else if (reportType === 'requisicoes') {
-                reportData = await this.generateRequisitionsReport(periodType, startDate, endDate);
-                fileName = `relatorio_requisicoes_${new Date().toISOString().split('T')[0]}`;
-            }
-            
-            if (reportFormat === 'pdf') {
-                await this.generatePDF(reportData, fileName);
-            } else {
-                await this.generateExcel(reportData, fileName);
-            }
-            
-            // Restaurar botão
-            generateBtn.innerHTML = originalText;
-            generateBtn.disabled = false;
-            
-            this.closeReportModal();
-            alert(`Relatório gerado com sucesso!`);
-            
-        } catch (error) {
-            console.error('Erro ao gerar relatório:', error);
-            alert('Erro ao gerar relatório. Tente novamente.');
-            
-            // Restaurar botão em caso de erro
-            const generateBtn = document.getElementById('generateReportBtn');
-            generateBtn.innerHTML = '<i class="fas fa-download"></i> Gerar Relatório';
-            generateBtn.disabled = false;
-        }
-    }
-
-    async generateStockReport(periodType, startDate, endDate) {
-        let filteredProducts = [...this.products];
-        
-        // Filtrar por período
-        if (periodType === 'ultima_atualizacao' || periodType === 'custom') {
-            filteredProducts = filteredProducts.filter(product => {
-                if (!product.lastUpdated) return false;
-                
-                const productDate = this.parseDate(product.lastUpdated);
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999); // Fim do dia
-                
-                return productDate >= start && productDate <= end;
-            });
-        }
-        
-        // Ordenar por data de última atualização
-        filteredProducts.sort((a, b) => {
-            const dateA = this.parseDate(a.lastUpdated);
-            const dateB = this.parseDate(b.lastUpdated);
-            return dateB - dateA;
-        });
-        
-        return {
-            type: 'estoque',
-            title: 'Relatório de Produtos em Estoque',
-            period: periodType === 'custom' ? `Período: ${this.formatDate(new Date(startDate))} à ${this.formatDate(new Date(endDate))}` : 'Todos os períodos',
-            generatedAt: new Date().toLocaleString('pt-BR'),
-            data: filteredProducts,
-            summary: {
-                totalProducts: filteredProducts.length,
-                totalQuantity: filteredProducts.reduce((sum, product) => sum + (product.quantity || 0), 0),
-                lowStock: filteredProducts.filter(product => (product.quantity || 0) < 100).length,
-                expired: filteredProducts.filter(product => {
-                    if (!product.expiry) return false;
-                    return new Date(product.expiry) < new Date();
-                }).length
-            }
-        };
-    }
-
-    async generateRequisitionsReport(periodType, startDate, endDate) {
-        let filteredRequisitions = [...this.requisitions];
-        
-        // Filtrar por período
-        if (periodType === 'data_requisicao' || periodType === 'custom') {
-            filteredRequisitions = filteredRequisitions.filter(requisition => {
-                if (!requisition.createdAt) return false;
-                
-                const requisitionDate = new Date(requisition.createdAt);
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                
-                return requisitionDate >= start && requisitionDate <= end;
-            });
-        }
-        
-        // Ordenar por data de criação
-        filteredRequisitions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        
-        return {
-            type: 'requisicoes',
-            title: 'Relatório de Requisições',
-            period: periodType === 'custom' ? `Período: ${this.formatDate(new Date(startDate))} à ${this.formatDate(new Date(endDate))}` : 'Todos os períodos',
-            generatedAt: new Date().toLocaleString('pt-BR'),
-            data: filteredRequisitions,
-            summary: {
-                totalRequisitions: filteredRequisitions.length,
-                totalItems: filteredRequisitions.reduce((sum, req) => sum + (req.totalRequested || 0), 0),
-                pending: filteredRequisitions.filter(req => req.status === 'Pendente').length,
-                completed: filteredRequisitions.filter(req => req.status === 'Finalizado').length
-            }
-        };
-    }
-
-    async generatePDF(reportData, fileName) {
-        // Implementação básica de PDF - você pode usar bibliotecas como jsPDF ou pdfmake
-        const printWindow = window.open('', '_blank');
-        
-        let content = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>${reportData.title}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    .header { text-align: center; margin-bottom: 30px; }
-                    .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-                    .subtitle { font-size: 16px; color: #666; margin-bottom: 20px; }
-                    .summary { background: #f5f5f5; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
-                    .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                    .table th { background-color: #f2f2f2; }
-                    .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <div class="title">${reportData.title}</div>
-                    <div class="subtitle">${reportData.period}</div>
-                    <div class="subtitle">Gerado em: ${reportData.generatedAt}</div>
-                </div>
-        `;
-        
-        // Adicionar resumo
-        content += `<div class="summary"><strong>Resumo:</strong> `;
-        if (reportData.type === 'estoque') {
-            content += `Total de Produtos: ${reportData.summary.totalProducts} | `;
-            content += `Quantidade Total: ${reportData.summary.totalQuantity} | `;
-            content += `Estoque Baixo: ${reportData.summary.lowStock} | `;
-            content += `Vencidos: ${reportData.summary.expired}`;
-        } else {
-            content += `Total de Requisições: ${reportData.summary.totalRequisitions} | `;
-            content += `Itens Requisitados: ${reportData.summary.totalItems} | `;
-            content += `Pendentes: ${reportData.summary.pending} | `;
-            content += `Finalizadas: ${reportData.summary.completed}`;
-        }
-        content += `</div>`;
-        
-        // Adicionar tabela de dados
-        if (reportData.type === 'estoque') {
-            content += `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Nome</th>
-                            <th>Quantidade</th>
-                            <th>Setor</th>
-                            <th>Última Atualização</th>
-                            <th>Validade</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            reportData.data.forEach(product => {
-                content += `
-                    <tr>
-                        <td>${product.code || ''}</td>
-                        <td>${product.name || ''}</td>
-                        <td>${this.formatNumber(product.quantity || 0)}</td>
-                        <td>${product.local || ''}</td>
-                        <td>${product.lastUpdated || ''}</td>
-                        <td>${product.expiry ? new Date(product.expiry).toLocaleDateString('pt-BR') : ''}</td>
-                    </tr>
-                `;
-            });
-            
-            content += `</tbody></table>`;
-        } else {
-            content += `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Data</th>
-                            <th>Status</th>
-                            <th>Itens</th>
-                            <th>Solicitante</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            reportData.data.forEach(requisition => {
-                content += `
-                    <tr>
-                        <td>${requisition.id || ''}</td>
-                        <td>${this.formatDateTime(requisition.createdAt)}</td>
-                        <td>${requisition.status || ''}</td>
-                        <td>${requisition.products ? requisition.products.length : 0}</td>
-                        <td>${requisition.createdBy || ''}</td>
-                        <td>${this.formatNumber(requisition.totalRequested || 0)}</td>
-                    </tr>
-                `;
-            });
-            
-            content += `</tbody></table>`;
-        }
-        
-        content += `
-                <div class="footer">
-                    Relatório gerado pelo Sistema de Controle de Estoque - Almoxarifado
-                </div>
-            </body>
-            </html>
-        `;
-        
-        printWindow.document.write(content);
-        printWindow.document.close();
-        printWindow.print();
-    }
-
-    async generateExcel(reportData, fileName) {
-        // Implementação básica de Excel - você pode usar bibliotecas como SheetJS
-        let csvContent = "data:text/csv;charset=utf-8,";
-        
-        if (reportData.type === 'estoque') {
-            csvContent += "Código,Nome,Quantidade,Setor,Última Atualização,Validade\n";
-            
-            reportData.data.forEach(product => {
-                const row = [
-                    product.code || '',
-                    product.name || '',
-                    product.quantity || 0,
-                    product.local || '',
-                    product.lastUpdated || '',
-                    product.expiry ? new Date(product.expiry).toLocaleDateString('pt-BR') : ''
-                ].map(field => `"${field}"`).join(',');
-                
-                csvContent += row + "\n";
-            });
-        } else {
-            csvContent += "ID,Data,Status,Itens,Solicitante,Total\n";
-            
-            reportData.data.forEach(requisition => {
-                const row = [
-                    requisition.id || '',
-                    this.formatDateTime(requisition.createdAt),
-                    requisition.status || '',
-                    requisition.products ? requisition.products.length : 0,
-                    requisition.createdBy || '',
-                    requisition.totalRequested || 0
-                ].map(field => `"${field}"`).join(',');
-                
-                csvContent += row + "\n";
-            });
-        }
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `${fileName}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    // Utilitários para relatórios
-    parseDate(dateString) {
-        if (!dateString) return new Date();
-        
-        // Tenta parsear no formato brasileiro (DD/MM/YYYY)
-        const parts = dateString.split('/');
-        if (parts.length === 3) {
-            return new Date(parts[2], parts[1] - 1, parts[0]);
-        }
-        
-        // Tenta parsear como ISO
-        return new Date(dateString);
-    }
-
-    formatDate(date) {
-        return date.toLocaleDateString('pt-BR');
-    }
-
     // ===================== UI and Utilities =====================
     setupEventListeners() {
         // Login
@@ -1642,7 +1290,7 @@ class InventorySystem {
             });
         });
 
-        // Modais - Botões principais
+        // Modals - Botões principais
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.addEventListener('click', () => this.openAddProductModal());
         
@@ -1652,11 +1300,7 @@ class InventorySystem {
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) addUserBtn.addEventListener('click', () => this.openAddUserModal());
 
-        // Report functionality
-        const reportBtn = document.getElementById('reportBtn');
-        if (reportBtn) reportBtn.addEventListener('click', () => this.openReportModal());
-
-        // Modais - Botões de fechar
+        // Modals - Botões de fechar
         const closeModal = document.getElementById('closeModal');
         if (closeModal) closeModal.addEventListener('click', () => this.closeProductModal());
         
@@ -1669,10 +1313,7 @@ class InventorySystem {
         const closeUserModal = document.getElementById('closeUserModal');
         if (closeUserModal) closeUserModal.addEventListener('click', () => this.closeUserModal());
 
-        const closeReportModal = document.getElementById('closeReportModal');
-        if (closeReportModal) closeReportModal.addEventListener('click', () => this.closeReportModal());
-
-        // Modais - Botões de cancelar
+        // Modals - Botões de cancelar
         const cancelBtn = document.getElementById('cancelBtn');
         if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeProductModal());
         
@@ -1684,9 +1325,6 @@ class InventorySystem {
         
         const cancelUserBtn = document.getElementById('cancelUserBtn');
         if (cancelUserBtn) cancelUserBtn.addEventListener('click', () => this.closeUserModal());
-
-        const cancelReportBtn = document.getElementById('cancelReportBtn');
-        if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => this.closeReportModal());
 
         // Seleção de produtos
         const selectProductsBtn = document.getElementById('selectProductsBtn');
@@ -1741,9 +1379,6 @@ class InventorySystem {
             });
         }
 
-        const reportForm = document.getElementById('reportForm');
-        if (reportForm) reportForm.addEventListener('submit', (e) => this.generateReport(e));
-
         // Search
         const searchInput = document.getElementById('searchInput');
         if (searchInput) searchInput.addEventListener('input', () => this.render());
@@ -1766,17 +1401,6 @@ class InventorySystem {
         if (productSearchInput) {
             productSearchInput.addEventListener('input', (e) => {
                 this.filterAvailableProducts(e.target.value);
-            });
-        }
-
-        // Show/hide custom period based on selection
-        const periodType = document.getElementById('periodType');
-        if (periodType) {
-            periodType.addEventListener('change', (e) => {
-                const customPeriod = document.getElementById('customPeriod');
-                if (customPeriod) {
-                    customPeriod.style.display = e.target.value === 'custom' ? 'block' : 'none';
-                }
             });
         }
 
@@ -1820,7 +1444,6 @@ class InventorySystem {
         this.closeProductSelectionModal();
         this.closeUserModal();
         this.closeConfirmModal();
-        this.closeReportModal();
     }
 
     openAddProductModal() {
