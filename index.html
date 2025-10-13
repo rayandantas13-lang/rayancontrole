@@ -264,5 +264,73 @@
     
     <!-- Script principal -->
     <script type="module" src="script.js"></script>
+
+<!-------------------------------->
+    <!-- Modal de Relatórios -->
+<div id="reportModal" class="modal">
+    <div class="modal-content large-modal">
+        <div class="modal-header">
+            <h3>Gerar Relatório</h3>
+            <button type="button" id="closeReportModal" class="close-btn">&times;</button>
+        </div>
+        <form id="reportForm">
+            <div class="form-group">
+                <label for="reportType">Tipo de Relatório:</label>
+                <select id="reportType" name="reportType" class="form-control" required>
+                    <option value="">Selecione o tipo</option>
+                    <option value="estoque">Produtos em Estoque</option>
+                    <option value="requisicoes">Requisições</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="periodType">Período de Referência:</label>
+                <select id="periodType" name="periodType" class="form-control" required>
+                    <option value="">Selecione o período</option>
+                    <option value="ultima_atualizacao">Última Atualização (Estoque)</option>
+                    <option value="data_requisicao">Data da Requisição</option>
+                    <option value="custom">Período Personalizado</option>
+                </select>
+            </div>
+
+            <div id="customPeriod" class="custom-period" style="display: none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="startDate">Data Início:</label>
+                        <input type="date" id="startDate" name="startDate" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">Data Fim:</label>
+                        <input type="date" id="endDate" name="endDate" class="form-control">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="reportFormat">Formato do Relatório:</label>
+                <div class="format-options">
+                    <label class="format-option">
+                        <input type="radio" name="reportFormat" value="pdf" checked>
+                        <span class="format-icon">📄</span>
+                        <span class="format-label">PDF</span>
+                    </label>
+                    <label class="format-option">
+                        <input type="radio" name="reportFormat" value="excel">
+                        <span class="format-icon">📊</span>
+                        <span class="format-label">Excel</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" id="cancelReportBtn" class="btn-secondary">Cancelar</button>
+                <button type="submit" id="generateReportBtn" class="btn-primary">
+                    <i class="fas fa-download"></i> Gerar Relatório
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-------------------------------->    
 </body>
 </html>
