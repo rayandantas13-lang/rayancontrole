@@ -1399,29 +1399,51 @@ class InventorySystem {
         </div>`;
     }
 
-    // ===================== UI and Utilities =====================
+    // ===================== MENU E RELATÓRIOS =====================
     setupEventListeners() {
-        // Login
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const email = e.target.loginEmail.value;
-                const password = e.target.loginPassword.value;
-                this.login(email, password);
+        // Menu
+        const menuToggle = document.getElementById('menuToggle');
+        if (menuToggle) {
+            menuToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleMenu();
             });
         }
 
-        // Logout
+        // Fechar menu ao clicar fora
+        document.addEventListener('click', () => {
+            this.closeMenu();
+        });
+
+        // Itens do menu
+        const reportBtn = document.getElementById('reportBtn');
+        if (reportBtn) reportBtn.addEventListener('click', () => this.openReportModal());
+
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) logoutBtn.addEventListener('click', () => this.logout());
 
-        // Tabs
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                this.switchTab(button.dataset.tab);
+        // Modal de relatório
+        const closeReportModal = document.getElementById('closeReportModal');
+        if (closeReportModal) closeReportModal.addEventListener('click', () => this.closeReportModal());
+        
+        const cancelReportBtn = document.getElementById('cancelReportBtn');
+        if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => this.closeReportModal());
+
+        const dateRange = document.getElementById('dateRange');
+        if (dateRange) dateRange.addEventListener('change', () => this.toggleCustomDateRange());
+
+        const reportForm = document.getElementById('reportForm');
+        if (reportForm) {
+            reportForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.generateReport();
             });
-        });
+        }
+
+        const reportType = document.getElementById('reportType');
+        if (reportType) {
+            reportType.addEventListener('change', () => this.toggleReportOptions());
+        }
 
         // Modais - Botões principais
         const addItemBtn = document.getElementById('addItemBtn');
@@ -1574,28 +1596,576 @@ class InventorySystem {
         }
     }
 
-    filterAvailableProducts(searchTerm) {
-        const availableProductItems = document.querySelectorAll('.available-product-item');
-        const locationFilter = document.getElementById('locationFilter');
-        const selectedLocation = locationFilter ? locationFilter.value : '';
-        const term = searchTerm.toLowerCase();
-        
-        availableProductItems.forEach(item => {
-            const name = item.querySelector('.available-product-name').textContent.toLowerCase();
-            const details = item.querySelector('.available-product-details').textContent.toLowerCase();
-            const location = item.dataset.location || '';
-            
-            const matchesSearch = name.includes(term) || details.includes(term);
-            const matchesLocation = !selectedLocation || location === selectedLocation;
-            
-            if (matchesSearch && matchesLocation) {
-                item.style.display = 'flex';
-            } else {
-                item.style.display = 'none';
-            }
-        });
+    toggleMenu() {
+        const menuDropdown = document.getElementById('headerMenuDropdown');
+        if (menuDropdown) {
+            menuDropdown.classList.toggle('show');
+        }
     }
 
+    closeMenu() {
+        const menuDropdown = document.getElementById('headerMenuDropdown');
+        if (menuDropdown) {
+            menuDropdown.classList.remove('show');
+        }
+    }
+
+    openReportModal() {
+        this.closeMenu();
+        
+        const reportForm = document.getElementById('reportForm');
+        if (reportForm) reportForm.reset();
+        
+        // Definir datas padrão
+        const today = new Date().toISOString().split('T')[0];
+        const startDate = document.getElementById('startDate');
+        const endDate = document.getElementById('endDate');
+        if (startDate) startDate.value = today;
+        if (endDate) endDate.value = today;
+        
+        this.toggleReportOptions();
+        
+        const reportModal = document.getElementById('reportModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (reportModal && modalOverlay) {
+            reportModal.classList.add('active');
+            modalOverlay.classList.add('active');
+        }
+    }
+
+    closeReportModal() {
+        const reportModal = document.getElementById('reportModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (reportModal) reportModal.classList.remove('active');
+        if (modalOverlay) modalOverlay.classList.remove('active');
+    }
+
+    toggleCustomDateRange() {
+        const dateRange = document.getElementById('dateRange');
+        const customDateRange = document.getElementById('customDateRange');
+        
+        if (dateRange && customDateRange) {
+            if (dateRange.value === 'custom') {
+                customDateRange.style.display = 'grid';
+            } else {
+                customDateRange.style.display = 'none';
+            }
+        }
+    }
+
+    toggleReportOptions() {
+        const reportType = document.getElementById('reportType');
+        const includeLotesSection = document.getElementById('includeLotesSection');
+        const includeExpirySection = document.getElementById('includeExpirySection');
+        
+        if (reportType && includeLotesSection && includeExpirySection) {
+            if (reportType.value === 'requisitions') {
+                includeLotesSection.style.display = 'none';
+                includeExpirySection.style.display = 'none';
+            } else {
+                includeLotesSection.style.display = 'block';
+                includeExpirySection.style.display = 'block';
+            }
+        }
+    }
+
+    // ===================== GERAÇÃO DE RELATÓRIOS =====================
+    async generateReport() {
+        const reportType = document.getElementById('reportType').value;
+        const dateRange = document.getElementById('dateRange').value;
+        const reportFormat = document.getElementById('reportFormat').value;
+        const includeLotes = document.getElementById('includeLotes')?.checked || false;
+        const includeExpiry = document.getElementById('includeExpiry')?.checked || false;
+        const startDate = document.getElementById('startDate')?.value;
+        const endDate = document.getElementById('endDate')?.value;
+
+        // Validar período personalizado
+        if (dateRange === 'custom' && (!startDate || !endDate)) {
+            alert('Por favor, selecione ambas as datas para o período personalizado.');
+            return;
+        }
+
+        // Mostrar loading
+        const generateBtn = document.getElementById('generateReportBtn');
+        const originalText = generateBtn.textContent;
+        generateBtn.innerHTML = '<div class="spinner"></div> Gerando...';
+        generateBtn.disabled = true;
+
+        try {
+            // Filtrar dados baseado no período
+            const filteredData = await this.filterDataByDateRange(reportType, dateRange, startDate, endDate);
+            
+            if (reportFormat === 'pdf') {
+                await this.generatePDFReport(reportType, filteredData, includeLotes, includeExpiry);
+            } else {
+                await this.generateExcelReport(reportType, filteredData, includeLotes, includeExpiry);
+            }
+            
+            this.closeReportModal();
+        } catch (error) {
+            console.error('Erro ao gerar relatório:', error);
+            alert('Erro ao gerar relatório: ' + error.message);
+        } finally {
+            // Restaurar botão
+            generateBtn.textContent = originalText;
+            generateBtn.disabled = false;
+        }
+    }
+
+    async filterDataByDateRange(reportType, dateRange, startDate, endDate) {
+        let filteredData = {};
+        
+        if (reportType === 'products' || reportType === 'all') {
+            filteredData.products = this.products;
+        }
+        
+        if (reportType === 'requisitions' || reportType === 'all') {
+            let requisitions = this.requisitions;
+            
+            if (dateRange !== 'all') {
+                const filterDate = this.getFilterDate(dateRange, startDate, endDate);
+                requisitions = requisitions.filter(req => {
+                    const reqDate = new Date(req.createdAt);
+                    return reqDate >= filterDate.start && reqDate <= filterDate.end;
+                });
+            }
+            
+            filteredData.requisitions = requisitions;
+        }
+        
+        return filteredData;
+    }
+
+    getFilterDate(dateRange, startDate, endDate) {
+        const today = new Date();
+        let start = new Date();
+        let end = new Date();
+        
+        switch (dateRange) {
+            case 'today':
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'week':
+                start.setDate(today.getDate() - today.getDay());
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'month':
+                start.setDate(1);
+                start.setHours(0, 0, 0, 0);
+                end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'quarter':
+                const quarter = Math.floor(today.getMonth() / 3);
+                start = new Date(today.getFullYear(), quarter * 3, 1);
+                end = new Date(today.getFullYear(), quarter * 3 + 3, 0);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'year':
+                start = new Date(today.getFullYear(), 0, 1);
+                end = new Date(today.getFullYear(), 11, 31);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'custom':
+                start = new Date(startDate);
+                end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                break;
+            default:
+                start = new Date(0); // Data mínima
+                end = new Date(); // Data atual
+        }
+        
+        return { start, end };
+    }
+
+    async generatePDFReport(reportType, data, includeLotes, includeExpiry) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Configurações do documento
+        doc.setFont('helvetica');
+        doc.setFontSize(16);
+        
+        // Cabeçalho
+        doc.setTextColor(41, 128, 185);
+        doc.text('RELATÓRIO DE ESTOQUE - SISTEMA DE ALMOXARIFADO', 105, 20, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 105, 28, { align: 'center' });
+        doc.text(`Usuário: ${this.currentUser?.email || 'Sistema'}`, 105, 33, { align: 'center' });
+        
+        let yPosition = 45;
+        
+        // Relatório de Produtos
+        if (reportType === 'products' || reportType === 'all') {
+            yPosition = this.addProductsToPDF(doc, data.products, yPosition, includeLotes, includeExpiry);
+        }
+        
+        // Relatório de Requisições
+        if (reportType === 'requisitions' || reportType === 'all') {
+            // Adicionar nova página se necessário
+            if (yPosition > 250) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            yPosition = this.addRequisitionsToPDF(doc, data.requisitions, yPosition);
+        }
+        
+        // Rodapé
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+        }
+        
+        // Salvar PDF
+        const fileName = `relatorio_estoque_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(fileName);
+        
+        alert('Relatório PDF gerado com sucesso!');
+    }
+
+    addProductsToPDF(doc, products, yPosition, includeLotes, includeExpiry) {
+        doc.setFontSize(14);
+        doc.setTextColor(44, 62, 80);
+        doc.text('PRODUTOS EM ESTOQUE', 14, yPosition);
+        yPosition += 10;
+        
+        if (products.length === 0) {
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Nenhum produto encontrado no estoque.', 14, yPosition);
+            return yPosition + 15;
+        }
+        
+        // Cabeçalho da tabela
+        doc.setFillColor(41, 128, 185);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(14, yPosition, 182, 8, 'F');
+        doc.setFontSize(9);
+        doc.text('Código', 18, yPosition + 6);
+        doc.text('Nome', 45, yPosition + 6);
+        doc.text('Setor', 100, yPosition + 6);
+        doc.text('Quantidade', 130, yPosition + 6);
+        doc.text('Status', 160, yPosition + 6);
+        doc.text('Última Atualização', 180, yPosition + 6);
+        
+        yPosition += 15;
+        
+        // Dados dos produtos
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(8);
+        
+        products.forEach((product, index) => {
+            if (yPosition > 270) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            
+            // Alternar cores das linhas
+            if (index % 2 === 0) {
+                doc.setFillColor(240, 240, 240);
+                doc.rect(14, yPosition - 4, 182, 8, 'F');
+            }
+            
+            doc.text(product.code || '-', 18, yPosition);
+            doc.text(this.truncateText(product.name || '-', 25), 45, yPosition);
+            doc.text(this.truncateText(product.local || '-', 15), 100, yPosition);
+            doc.text(this.formatNumber(product.quantity || 0), 130, yPosition);
+            
+            // Status de validade
+            const expiryStatus = this.getProductExpiryStatus(product.lotes);
+            doc.setTextColor(this.getStatusColor(expiryStatus.status));
+            doc.text(expiryStatus.label, 160, yPosition);
+            doc.setTextColor(0, 0, 0);
+            
+            doc.text(product.lastUpdated || '-', 180, yPosition);
+            
+            yPosition += 8;
+            
+            // Detalhes dos lotes
+            if (includeLotes && product.lotes && product.lotes.length > 0) {
+                product.lotes.forEach(lote => {
+                    if (yPosition > 270) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    const loteStatus = this.getExpiryStatus(lote.expiry);
+                    doc.setFontSize(7);
+                    doc.setTextColor(100, 100, 100);
+                    doc.text(`   Lote ${lote.number}: ${this.formatNumber(lote.quantity)} - Val: ${new Date(lote.expiry).toLocaleDateString('pt-BR')} (${loteStatus.label})`, 18, yPosition);
+                    doc.setFontSize(8);
+                    doc.setTextColor(0, 0, 0);
+                    yPosition += 5;
+                });
+                yPosition += 3;
+            }
+        });
+        
+        // Análise de validade
+        if (includeExpiry) {
+            yPosition = this.addExpiryAnalysisToPDF(doc, products, yPosition);
+        }
+        
+        return yPosition + 10;
+    }
+
+    addRequisitionsToPDF(doc, requisitions, yPosition) {
+        doc.setFontSize(14);
+        doc.setTextColor(44, 62, 80);
+        doc.text('REQUISIÇÕES REALIZADAS', 14, yPosition);
+        yPosition += 10;
+        
+        if (requisitions.length === 0) {
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Nenhuma requisição encontrada.', 14, yPosition);
+            return yPosition + 15;
+        }
+        
+        requisitions.forEach((requisition, index) => {
+            if (yPosition > 250) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            
+            doc.setFontSize(10);
+            doc.setTextColor(52, 152, 219);
+            doc.text(`Requisição #${requisition.id} - ${requisition.status}`, 14, yPosition);
+            yPosition += 6;
+            
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Data: ${this.formatDateTime(requisition.createdAt)} - Por: ${requisition.createdBy}`, 14, yPosition);
+            yPosition += 6;
+            
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Total Requisitado: ${this.formatNumber(requisition.totalRequested || 0)} itens`, 14, yPosition);
+            yPosition += 8;
+            
+            // Produtos da requisição
+            if (requisition.products && requisition.products.length > 0) {
+                requisition.products.forEach(product => {
+                    if (yPosition > 270) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    doc.text(`• ${product.name} (${product.code}): ${this.formatNumber(product.requestedQuantity)} de ${this.formatNumber(product.availableQuantity)}`, 18, yPosition);
+                    yPosition += 5;
+                });
+            }
+            
+            yPosition += 10;
+        });
+        
+        return yPosition;
+    }
+
+    addExpiryAnalysisToPDF(doc, products, yPosition) {
+        if (yPosition > 220) {
+            doc.addPage();
+            yPosition = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+        doc.text('ANÁLISE DE VALIDADE', 14, yPosition);
+        yPosition += 8;
+        
+        const expiryAnalysis = {
+            conforme: 0,
+            atencao: 0,
+            vencido: 0,
+            semData: 0
+        };
+        
+        products.forEach(product => {
+            const status = this.getProductExpiryStatus(product.lotes);
+            switch (status.status) {
+                case 'conforme': expiryAnalysis.conforme++; break;
+                case 'atencao': expiryAnalysis.atencao++; break;
+                case 'vencido': expiryAnalysis.vencido++; break;
+                default: expiryAnalysis.semData++; break;
+            }
+        });
+        
+        doc.setFontSize(9);
+        doc.setTextColor(39, 174, 96);
+        doc.text(`✅ Conforme: ${expiryAnalysis.conforme} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        doc.setTextColor(243, 156, 18);
+        doc.text(`⚠️ Atenção: ${expiryAnalysis.atencao} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        doc.setTextColor(231, 76, 60);
+        doc.text(`❌ Vencido: ${expiryAnalysis.vencido} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        doc.setTextColor(100, 100, 100);
+        doc.text(`📋 Sem Data: ${expiryAnalysis.semData} produtos`, 18, yPosition);
+        yPosition += 10;
+        
+        return yPosition;
+    }
+
+    async generateExcelReport(reportType, data, includeLotes, includeExpiry) {
+        const wb = XLSX.utils.book_new();
+        
+        if (reportType === 'products' || reportType === 'all') {
+            this.addProductsToExcel(wb, data.products, includeLotes, includeExpiry);
+        }
+        
+        if (reportType === 'requisitions' || reportType === 'all') {
+            this.addRequisitionsToExcel(wb, data.requisitions);
+        }
+        
+        // Salvar arquivo
+        const fileName = `relatorio_estoque_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        
+        alert('Relatório Excel gerado com sucesso!');
+    }
+
+    addProductsToExcel(wb, products, includeLotes, includeExpiry) {
+        const wsData = [
+            ['RELATÓRIO DE PRODUTOS EM ESTOQUE'],
+            ['Gerado em:', new Date().toLocaleDateString('pt-BR'), 'às', new Date().toLocaleTimeString('pt-BR')],
+            ['Usuário:', this.currentUser?.email || 'Sistema'],
+            [], // Linha em branco
+            ['Código', 'Nome', 'Setor', 'Quantidade Total', 'Status Validade', 'Última Atualização', 'Descrição']
+        ];
+        
+        // Adicionar produtos
+        products.forEach(product => {
+            const expiryStatus = this.getProductExpiryStatus(product.lotes);
+            wsData.push([
+                product.code || '',
+                product.name || '',
+                product.local || '',
+                product.quantity || 0,
+                expiryStatus.label,
+                product.lastUpdated || '',
+                product.description || ''
+            ]);
+            
+            // Adicionar lotes se solicitado
+            if (includeLotes && product.lotes && product.lotes.length > 0) {
+                product.lotes.forEach(lote => {
+                    const loteStatus = this.getExpiryStatus(lote.expiry);
+                    wsData.push([
+                        '',
+                        `Lote: ${lote.number}`,
+                        '',
+                        lote.quantity,
+                        loteStatus.label,
+                        new Date(lote.expiry).toLocaleDateString('pt-BR'),
+                        ''
+                    ]);
+                });
+                wsData.push([]); // Linha em branco entre produtos
+            }
+        });
+        
+        // Adicionar análise de validade se solicitado
+        if (includeExpiry) {
+            wsData.push([]);
+            wsData.push(['ANÁLISE DE VALIDADE']);
+            
+            const expiryAnalysis = {
+                conforme: 0,
+                atencao: 0,
+                vencido: 0,
+                semData: 0
+            };
+            
+            products.forEach(product => {
+                const status = this.getProductExpiryStatus(product.lotes);
+                switch (status.status) {
+                    case 'conforme': expiryAnalysis.conforme++; break;
+                    case 'atencao': expiryAnalysis.atencao++; break;
+                    case 'vencido': expiryAnalysis.vencido++; break;
+                    default: expiryAnalysis.semData++; break;
+                }
+            });
+            
+            wsData.push(['Status', 'Quantidade']);
+            wsData.push(['Conforme', expiryAnalysis.conforme]);
+            wsData.push(['Atenção', expiryAnalysis.atencao]);
+            wsData.push(['Vencido', expiryAnalysis.vencido]);
+            wsData.push(['Sem Data', expiryAnalysis.semData]);
+        }
+        
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
+    }
+
+    addRequisitionsToExcel(wb, requisitions) {
+        const wsData = [
+            ['RELATÓRIO DE REQUISIÇÕES'],
+            ['Gerado em:', new Date().toLocaleDateString('pt-BR'), 'às', new Date().toLocaleTimeString('pt-BR')],
+            ['Usuário:', this.currentUser?.email || 'Sistema'],
+            [], // Linha em branco
+            ['ID Requisição', 'Data', 'Solicitante', 'Status', 'Total Itens', 'Descrição']
+        ];
+        
+        requisitions.forEach(requisition => {
+            wsData.push([
+                requisition.id,
+                this.formatDateTime(requisition.createdAt),
+                requisition.createdBy,
+                requisition.status,
+                requisition.totalRequested || 0,
+                requisition.description || ''
+            ]);
+            
+            // Adicionar produtos da requisição
+            if (requisition.products && requisition.products.length > 0) {
+                wsData.push(['', 'Produtos da Requisição:', '', '', '', '']);
+                requisition.products.forEach(product => {
+                    wsData.push([
+                        '',
+                        product.name,
+                        product.code,
+                        `Req: ${product.requestedQuantity}`,
+                        `Disp: ${product.availableQuantity}`,
+                        product.setor
+                    ]);
+                });
+                wsData.push([]); // Linha em branco
+            }
+        });
+        
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Requisições');
+    }
+
+    // Utilitários para relatórios
+    truncateText(text, maxLength) {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength - 3) + '...';
+    }
+
+    getStatusColor(status) {
+        switch (status) {
+            case 'conforme': return [39, 174, 96]; // Verde
+            case 'atencao': return [243, 156, 18]; // Laranja
+            case 'vencido': return [231, 76, 60];  // Vermelho
+            default: return [100, 100, 100];       // Cinza
+        }
+    }
+
+    // ===================== UI and Utilities =====================
     closeAllModals() {
         this.closeProductModal();
         this.closeRequisitionModal();
@@ -1603,6 +2173,7 @@ class InventorySystem {
         this.closeUserModal();
         this.closeConfirmModal();
         this.closeLoteModal();
+        this.closeReportModal();
     }
 
     openAddProductModal() {
@@ -1724,6 +2295,28 @@ class InventorySystem {
         
         if (userModal) userModal.classList.remove('active');
         if (modalOverlay) modalOverlay.classList.remove('active');
+    }
+
+    filterAvailableProducts(searchTerm) {
+        const availableProductItems = document.querySelectorAll('.available-product-item');
+        const locationFilter = document.getElementById('locationFilter');
+        const selectedLocation = locationFilter ? locationFilter.value : '';
+        const term = searchTerm.toLowerCase();
+        
+        availableProductItems.forEach(item => {
+            const name = item.querySelector('.available-product-name').textContent.toLowerCase();
+            const details = item.querySelector('.available-product-details').textContent.toLowerCase();
+            const location = item.dataset.location || '';
+            
+            const matchesSearch = name.includes(term) || details.includes(term);
+            const matchesLocation = !selectedLocation || location === selectedLocation;
+            
+            if (matchesSearch && matchesLocation) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
     }
 
     escapeHtml(text) {
