@@ -48,7 +48,7 @@
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+    --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
     
     /* Espaçamentos */
     --spacing-xs: 0.25rem;
@@ -185,6 +185,7 @@ header p {
     font-weight: 600;
     transition: var(--transition);
     z-index: 100;
+    cursor: pointer;
 }
 
 .menu-toggle:hover {
@@ -253,6 +254,7 @@ header p {
     border-radius: var(--border-radius);
     font-weight: 600;
     transition: var(--transition);
+    cursor: pointer;
 }
 
 .logout-btn:hover {
@@ -925,8 +927,8 @@ form {
     color: var(--text-white);
 }
 
-.status-finished {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+.status-finalizado {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
     color: var(--text-white);
 }
 
@@ -994,7 +996,6 @@ form {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-white);
-    placeholder-color: var(--text-muted);
 }
 
 .login-form .form-group input:focus {
@@ -2005,4 +2006,63 @@ form {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-hover);
+}
+
+/* Correções para compatibilidade com o JavaScript */
+#mainApp {
+    display: none;
+}
+
+#loginPage {
+    display: flex;
+}
+
+/* Melhorias para inputs de quantidade */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Estilos para filtros de localização */
+#locationFilter {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-weight: 500;
+}
+
+#locationFilter:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+/* Ajustes para melhor legibilidade */
+.product-detail-value, .requisition-detail-value {
+    word-break: break-word;
+}
+
+/* Garantir que os botões tenham cursor pointer */
+button, .btn-edit, .btn-delete, .menu-item, .close-btn {
+    cursor: pointer;
+}
+
+/* Melhorar a visibilidade dos placeholders */
+::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* Ajustes para elementos de formulário em modais */
+.modal-body input:focus,
+.modal-body textarea:focus,
+.modal-body select:focus {
+    transform: translateY(-1px);
 }
