@@ -1784,46 +1784,46 @@ class InventorySystem {
     }
 
     async generatePDFReport(reportType, data, includeLotes, includeExpiry) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // Configurações do documento
-    doc.setFont('helvetica');
-    doc.setFontSize(16);
-    
-    // Cabeçalho - usar RGB para cores seguras
-    doc.setTextColor(41, 128, 185);
-    doc.text('RELATÓRIO DE ESTOQUE - SISTEMA DE ALMOXARIFADO', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 105, 28, { align: 'center' });
-    doc.text(`Usuário: ${this.currentUser?.email || 'Sistema'}`, 105, 33, { align: 'center' });
-    
-    let yPosition = 45;
-    
-    // Relatório de Produtos
-    if (reportType === 'products' || reportType === 'all') {
-        yPosition = this.addProductsToPDF(doc, data.products, yPosition, includeLotes, includeExpiry);
-    }
-    
-    // Relatório de Requisições
-    if (reportType === 'requisitions' || reportType === 'all') {
-        // Adicionar nova página se necessário
-        if (yPosition > 250) {
-            doc.addPage();
-            yPosition = 20;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Configurações do documento
+        doc.setFont('helvetica');
+        doc.setFontSize(16);
+        
+        // Cabeçalho - usar RGB para cores seguras
+        doc.setTextColor(41, 128, 185);
+        doc.text('RELATÓRIO DE ESTOQUE - SISTEMA DE ALMOXARIFADO', 105, 20, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 105, 28, { align: 'center' });
+        doc.text(`Usuário: ${this.currentUser?.email || 'Sistema'}`, 105, 33, { align: 'center' });
+        
+        let yPosition = 45;
+        
+        // Relatório de Produtos
+        if (reportType === 'products' || reportType === 'all') {
+            yPosition = this.addProductsToPDF(doc, data.products, yPosition, includeLotes, includeExpiry);
         }
-        yPosition = this.addRequisitionsToPDF(doc, data.requisitions, yPosition);
-    }
-    
-    // Rodapé
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+        
+        // Relatório de Requisições
+        if (reportType === 'requisitions' || reportType === 'all') {
+            // Adicionar nova página se necessário
+            if (yPosition > 250) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            yPosition = this.addRequisitionsToPDF(doc, data.requisitions, yPosition);
+        }
+        
+        // Rodapé
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
         }
         
         // Salvar PDF
@@ -1833,109 +1833,107 @@ class InventorySystem {
         alert('Relatório PDF gerado com sucesso!');
     }
 
-   addProductsToPDF(doc, products, yPosition, includeLotes, includeExpiry) {
-    doc.setFontSize(14);
-    doc.setTextColor(44, 62, 80); // Usar RGB para cores padrão
-    doc.text('PRODUTOS EM ESTOQUE', 14, yPosition);
-    yPosition += 10;
-    
-    if (products.length === 0) {
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text('Nenhum produto encontrado no estoque.', 14, yPosition);
-        return yPosition + 15;
-    }
-    
-    // Cabeçalho da tabela
-    doc.setFillColor(41, 128, 185);
-    doc.setTextColor(255, 255, 255);
-    doc.rect(14, yPosition, 182, 8, 'F');
-    doc.setFontSize(9);
-    doc.text('Código', 18, yPosition + 6);
-    doc.text('Nome', 45, yPosition + 6);
-    doc.text('Setor', 100, yPosition + 6);
-    doc.text('Quantidade', 130, yPosition + 6);
-    doc.text('Status', 160, yPosition + 6);
-    doc.text('Última Atualização', 180, yPosition + 6);
-    
-    yPosition += 15;
-    
-    // Dados dos produtos
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
-    
-    products.forEach((product, index) => {
-        if (yPosition > 270) {
-            doc.addPage();
-            yPosition = 20;
+    // CORREÇÃO DA FUNÇÃO addProductsToPDF
+    addProductsToPDF(doc, products, yPosition, includeLotes, includeExpiry) {
+        doc.setFontSize(14);
+        doc.setTextColor(44, 62, 80); // Usar RGB para cores padrão
+        doc.text('PRODUTOS EM ESTOQUE', 14, yPosition);
+        yPosition += 10;
+        
+        if (products.length === 0) {
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text('Nenhum produto encontrado no estoque.', 14, yPosition);
+            return yPosition + 15;
         }
         
-        // Alternar cores das linhas
-        if (index % 2 === 0) {
-            doc.setFillColor(240, 240, 240);
-            doc.rect(14, yPosition - 4, 182, 8, 'F');
+        // Cabeçalho da tabela
+        doc.setFillColor(41, 128, 185);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(14, yPosition, 182, 8, 'F');
+        doc.setFontSize(9);
+        doc.text('Código', 18, yPosition + 6);
+        doc.text('Nome', 45, yPosition + 6);
+        doc.text('Setor', 100, yPosition + 6);
+        doc.text('Quantidade', 130, yPosition + 6);
+        doc.text('Status', 160, yPosition + 6);
+        doc.text('Última Atualização', 180, yPosition + 6);
+        
+        yPosition += 15;
+        
+        // Dados dos produtos
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(8);
+        
+        products.forEach((product, index) => {
+            if (yPosition > 270) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            
+            // Alternar cores das linhas
+            if (index % 2 === 0) {
+                doc.setFillColor(240, 240, 240);
+                doc.rect(14, yPosition - 4, 182, 8, 'F');
+            }
+            
+            doc.text(product.code || '-', 18, yPosition);
+            doc.text(this.truncateText(product.name || '-', 25), 45, yPosition);
+            doc.text(this.truncateText(product.local || '-', 15), 100, yPosition);
+            doc.text(this.formatNumber(product.quantity || 0), 130, yPosition);
+            
+            // Status de validade - CORREÇÃO APLICADA
+            const expiryStatus = this.getProductExpiryStatus(product.lotes);
+            
+            // Aplicar cor baseada no status usando RGB
+            switch (expiryStatus.status) {
+                case 'conforme':
+                    doc.setTextColor(39, 174, 96); // Verde
+                    break;
+                case 'atencao':
+                    doc.setTextColor(243, 156, 18); // Laranja
+                    break;
+                case 'vencido':
+                    doc.setTextColor(231, 76, 60); // Vermelho
+                    break;
+                default:
+                    doc.setTextColor(149, 165, 166); // Cinza
+            }
+            
+            doc.text(expiryStatus.label, 160, yPosition);
+            doc.setTextColor(0, 0, 0); // Reset para preto
+            
+            doc.text(product.lastUpdated || '-', 180, yPosition);
+            
+            yPosition += 8;
+            
+            // Detalhes dos lotes
+            if (includeLotes && product.lotes && product.lotes.length > 0) {
+                product.lotes.forEach(lote => {
+                    if (yPosition > 270) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    const loteStatus = this.getExpiryStatus(lote.expiry);
+                    doc.setFontSize(7);
+                    doc.setTextColor(100, 100, 100);
+                    doc.text(`   Lote ${lote.number}: ${this.formatNumber(lote.quantity)} - Val: ${new Date(lote.expiry).toLocaleDateString('pt-BR')} (${loteStatus.label})`, 18, yPosition);
+                    doc.setFontSize(8);
+                    doc.setTextColor(0, 0, 0);
+                    yPosition += 5;
+                });
+                yPosition += 3;
+            }
+        });
+        
+        // Análise de validade
+        if (includeExpiry) {
+            yPosition = this.addExpiryAnalysisToPDF(doc, products, yPosition);
         }
         
-        doc.text(product.code || '-', 18, yPosition);
-        doc.text(this.truncateText(product.name || '-', 25), 45, yPosition);
-        doc.text(this.truncateText(product.local || '-', 15), 100, yPosition);
-        doc.text(this.formatNumber(product.quantity || 0), 130, yPosition);
-        
-        // Status de validade - CORREÇÃO AQUI
-        const expiryStatus = this.getProductExpiryStatus(product.lotes);
-        const statusColor = this.getStatusColor(expiryStatus.status);
-        
-        hexToRgb(hex) {
-    // Remove o # se existir
-    hex = hex.replace(/^#/, '');
-    
-    // Parse para RGB
-    if (hex.length === 3) {
-        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        return yPosition + 10;
     }
-    
-    const num = parseInt(hex, 16);
-    return {
-        r: (num >> 16) & 255,
-        g: (num >> 8) & 255,
-        b: num & 255
-    };
-}
-        
-        doc.text(expiryStatus.label, 160, yPosition);
-        doc.setTextColor(0, 0, 0); // Reset para preto
-        
-        doc.text(product.lastUpdated || '-', 180, yPosition);
-        
-        yPosition += 8;
-        
-        // Detalhes dos lotes
-        if (includeLotes && product.lotes && product.lotes.length > 0) {
-            product.lotes.forEach(lote => {
-                if (yPosition > 270) {
-                    doc.addPage();
-                    yPosition = 20;
-                }
-                
-                const loteStatus = this.getExpiryStatus(lote.expiry);
-                doc.setFontSize(7);
-                doc.setTextColor(100, 100, 100);
-                doc.text(`   Lote ${lote.number}: ${this.formatNumber(lote.quantity)} - Val: ${new Date(lote.expiry).toLocaleDateString('pt-BR')} (${loteStatus.label})`, 18, yPosition);
-                doc.setFontSize(8);
-                doc.setTextColor(0, 0, 0);
-                yPosition += 5;
-            });
-            yPosition += 3;
-        }
-    });
-    
-    // Análise de validade
-    if (includeExpiry) {
-        yPosition = this.addExpiryAnalysisToPDF(doc, products, yPosition);
-    }
-    
-    return yPosition + 10;
-}
 
     addRequisitionsToPDF(doc, requisitions, yPosition) {
         doc.setFontSize(14);
@@ -1990,61 +1988,57 @@ class InventorySystem {
     }
 
     addExpiryAnalysisToPDF(doc, products, yPosition) {
-    if (yPosition > 220) {
-        doc.addPage();
-        yPosition = 20;
-    }
-    
-    doc.setFontSize(12);
-    doc.setTextColor(44, 62, 80);
-    doc.text('ANÁLISE DE VALIDADE', 14, yPosition);
-    yPosition += 8;
-    
-    const expiryAnalysis = {
-        conforme: 0,
-        atencao: 0,
-        vencido: 0,
-        semData: 0
-    };
-    
-    products.forEach(product => {
-        const status = this.getProductExpiryStatus(product.lotes);
-        switch (status.status) {
-            case 'conforme': expiryAnalysis.conforme++; break;
-            case 'atencao': expiryAnalysis.atencao++; break;
-            case 'vencido': expiryAnalysis.vencido++; break;
-            default: expiryAnalysis.semData++; break;
+        if (yPosition > 220) {
+            doc.addPage();
+            yPosition = 20;
         }
-    });
-    
-    doc.setFontSize(9);
-    
-    // Conforme - Verde
-    const verde = this.hexToRgb('#27ae60');
-    doc.setTextColor(verde.r, verde.g, verde.b);
-    doc.text(`✅ Conforme: ${expiryAnalysis.conforme} produtos`, 18, yPosition);
-    yPosition += 5;
-    
-    // Atenção - Laranja
-    const laranja = this.hexToRgb('#f39c12');
-    doc.setTextColor(laranja.r, laranja.g, laranja.b);
-    doc.text(`⚠️ Atenção: ${expiryAnalysis.atencao} produtos`, 18, yPosition);
-    yPosition += 5;
-    
-    // Vencido - Vermelho
-    const vermelho = this.hexToRgb('#e74c3c');
-    doc.setTextColor(vermelho.r, vermelho.g, vermelho.b);
-    doc.text(`❌ Vencido: ${expiryAnalysis.vencido} produtos`, 18, yPosition);
-    yPosition += 5;
-    
-    // Sem Data - Cinza
-    const cinza = this.hexToRgb('#95a5a6');
-    doc.setTextColor(cinza.r, cinza.g, cinza.b);
-    doc.text(`📋 Sem Data: ${expiryAnalysis.semData} produtos`, 18, yPosition);
-    yPosition += 10;
-    
-    return yPosition;
-}
+        
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+        doc.text('ANÁLISE DE VALIDADE', 14, yPosition);
+        yPosition += 8;
+        
+        const expiryAnalysis = {
+            conforme: 0,
+            atencao: 0,
+            vencido: 0,
+            semData: 0
+        };
+        
+        products.forEach(product => {
+            const status = this.getProductExpiryStatus(product.lotes);
+            switch (status.status) {
+                case 'conforme': expiryAnalysis.conforme++; break;
+                case 'atencao': expiryAnalysis.atencao++; break;
+                case 'vencido': expiryAnalysis.vencido++; break;
+                default: expiryAnalysis.semData++; break;
+            }
+        });
+        
+        doc.setFontSize(9);
+        
+        // Conforme - Verde
+        doc.setTextColor(39, 174, 96);
+        doc.text(`✅ Conforme: ${expiryAnalysis.conforme} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        // Atenção - Laranja
+        doc.setTextColor(243, 156, 18);
+        doc.text(`⚠️ Atenção: ${expiryAnalysis.atencao} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        // Vencido - Vermelho
+        doc.setTextColor(231, 76, 60);
+        doc.text(`❌ Vencido: ${expiryAnalysis.vencido} produtos`, 18, yPosition);
+        yPosition += 5;
+        
+        // Sem Data - Cinza
+        doc.setTextColor(149, 165, 166);
+        doc.text(`📋 Sem Data: ${expiryAnalysis.semData} produtos`, 18, yPosition);
+        yPosition += 10;
+        
+        return yPosition;
+    }
 
     async generateExcelReport(reportType, data, includeLotes, includeExpiry) {
         const wb = XLSX.utils.book_new();
@@ -2183,14 +2177,14 @@ class InventorySystem {
         return text.substring(0, maxLength - 3) + '...';
     }
 
-   getStatusColor(status) {
-    switch (status) {
-        case 'conforme': return '#27ae60'; // Verde
-        case 'atencao': return '#f39c12';  // Laranja
-        case 'vencido': return '#e74c3c';  // Vermelho
-        default: return '#95a5a6';         // Cinza
+    getStatusColor(status) {
+        switch (status) {
+            case 'conforme': return '#27ae60'; // Verde
+            case 'atencao': return '#f39c12';  // Laranja
+            case 'vencido': return '#e74c3c';  // Vermelho
+            default: return '#95a5a6';         // Cinza
+        }
     }
-}
 
     // ===================== UI and Utilities =====================
     closeAllModals() {
