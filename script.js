@@ -27,23 +27,23 @@ class InventorySystem {
         this.currentTab = 'products';
         this.nextRequisitionNumber = 1;
         this.currentUser = null;
-        this.userRole = 'guest'; // guest, normal, subadm, admin
+        this.userRole = 'guest';
+        this.currentLotes = []; // Array para armazenar lotes temporários
+        this.editingLoteIndex = -1; // Índice do lote sendo editado
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
-        await this.setupAuthListener(); // Configura o listener de autenticação primeiro
+        await this.setupAuthListener();
     }
 
     // ===================== Utilitários de Formatação =====================
     formatNumber(number, decimalPlaces = 0) {
         if (number === null || number === undefined) return '0';
         
-        // Arredonda para no máximo 3 casas decimais
         const rounded = Number(number).toFixed(decimalPlaces);
         
-        // Formata com separador de milhares
         return Number(rounded).toLocaleString('pt-BR', {
             minimumFractionDigits: 0,
             maximumFractionDigits: decimalPlaces
@@ -54,7 +54,6 @@ class InventorySystem {
         if (!date) return '';
         
         const d = new Date(date);
-        // Formata como: 10/10/2025 - 08:46
         return d.toLocaleDateString('pt-BR') + ' - ' + 
                d.toLocaleTimeString('pt-BR', { 
                    hour: '2-digit', 
@@ -69,28 +68,25 @@ class InventorySystem {
             onAuthStateChanged(auth, async (user) => {
                 this.currentUser = user;
                 if (user) {
-                    // Carregar o papel do usuário do Firestore
                     const userDocRef = doc(db, "users", user.uid);
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         this.userRole = userDoc.data().role;
                     } else {
-                        // Se o usuário existe no Auth mas não no Firestore, pode ser um novo registro
-                        // ou um usuário com papel padrão (normal)
                         this.userRole = 'normal';
                         await setDoc(userDocRef, { email: user.email, role: this.userRole });
                     }
                     console.log("Usuário logado:", user.email, "Papel:", this.userRole);
                     document.getElementById("loginPage").style.display = "none";
                     document.getElementById("mainApp").style.display = "block";
-                    await this.loadFromFirestore(); // Carregar dados após login
+                    await this.loadFromFirestore();
                     await this.loadRequisitionsFromFirestore();
                 } else {
                     this.userRole = 'guest';
                     console.log("Usuário deslogado.");
                     document.getElementById("loginPage").style.display = "flex";
                     document.getElementById("mainApp").style.display = "none";
-                    this.products = []; // Limpar dados se deslogado
+                    this.products = [];
                     this.requisitions = [];
                 }
                 this.applyPermissions();
@@ -128,21 +124,17 @@ class InventorySystem {
         const isSubAdm = this.userRole === 'subadm';
         const isNormalUser = this.userRole === 'normal';
 
-        // Gerenciamento de Usuários (apenas ADM)
         const userManagementTabBtn = document.getElementById('userManagementTabBtn');
         if (userManagementTabBtn) userManagementTabBtn.style.display = isAdmin ? 'block' : 'none';
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) addUserBtn.style.display = isAdmin ? 'block' : 'none';
 
-        // Adicionar Item (ADM e SubAdm)
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
 
-        // Gerar Nova Requisição (Todos, mas com campos específicos para cada um)
         const generateRequisitionBtn = document.getElementById('generateRequisitionBtn');
         if (generateRequisitionBtn) generateRequisitionBtn.style.display = (isAdmin || isSubAdm || isNormalUser) ? 'block' : 'none';
 
-        // Campos de requisição (descrição vs quantidade estimada)
         const requisitionDescriptionLabel = document.querySelector('#requisitionModal label[for="requisitionDescription"]');
         const requisitionDescriptionInput = document.getElementById('requisitionDescription');
         const estimatedQuantityLabel = document.querySelector('#requisitionModal label[for="estimatedQuantity"]');
@@ -162,7 +154,6 @@ class InventorySystem {
             if (estimatedQuantityInput) estimatedQuantityInput.removeAttribute('required');
         }
 
-        // Atualizar renderização para aplicar permissões nos itens da lista
         this.render();
         this.renderRequisitions();
         this.renderUsers();
@@ -218,17 +209,14 @@ class InventorySystem {
 
     async saveRequisitionToFirestore(requisition) {
         try {
-            // Limpar objeto antes de salvar
             const cleanRequisition = JSON.parse(JSON.stringify(requisition));
             
-            // Remover campos undefined/null
             Object.keys(cleanRequisition).forEach(key => {
                 if (cleanRequisition[key] === undefined || cleanRequisition[key] === null) {
                     delete cleanRequisition[key];
                 }
             });
             
-            // Limpar produtos também
             if (cleanRequisition.products) {
                 cleanRequisition.products = cleanRequisition.products.map(product => {
                     const cleanProduct = { ...product };
@@ -284,6 +272,160 @@ class InventorySystem {
         }
     }
 
+    // ===================== Gerenciamento de Lotes =====================
+    openAddLoteModal() {
+        const loteForm = document.getElementById('loteForm');
+        if (loteForm) loteForm.reset();
+        
+        const loteIndex = document.getElementById('loteIndex');
+        if (loteIndex) loteIndex.value = '';
+        
+        const loteModalTitle = document.getElementById('loteModalTitle');
+        if (loteModalTitle) loteModalTitle.textContent = 'Adicionar Lote';
+        
+        this.editingLoteIndex = -1;
+        
+        const loteModal = document.getElementById('loteModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (loteModal && modalOverlay) {
+            loteModal.classList.add('active');
+            modalOverlay.classList.add('active');
+        }
+    }
+
+    openEditLoteModal(index) {
+        const lote = this.currentLotes[index];
+        if (lote) {
+            const loteIndex = document.getElementById('loteIndex');
+            if (loteIndex) loteIndex.value = index;
+            
+            const loteNumber = document.getElementById('loteNumber');
+            if (loteNumber) loteNumber.value = lote.number || '';
+            
+            const loteQuantity = document.getElementById('loteQuantity');
+            if (loteQuantity) loteQuantity.value = lote.quantity || 0;
+            
+            const loteExpiry = document.getElementById('loteExpiry');
+            if (loteExpiry && lote.expiry) {
+                const expiryDate = new Date(lote.expiry);
+                loteExpiry.value = expiryDate.toISOString().split('T')[0];
+            }
+            
+            const loteModalTitle = document.getElementById('loteModalTitle');
+            if (loteModalTitle) loteModalTitle.textContent = 'Editar Lote';
+            
+            this.editingLoteIndex = index;
+            
+            const loteModal = document.getElementById('loteModal');
+            const modalOverlay = document.getElementById('modalOverlay');
+            
+            if (loteModal && modalOverlay) {
+                loteModal.classList.add('active');
+                modalOverlay.classList.add('active');
+            }
+        }
+    }
+
+    closeLoteModal() {
+        const loteModal = document.getElementById('loteModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (loteModal) loteModal.classList.remove('active');
+        if (modalOverlay) modalOverlay.classList.remove('active');
+    }
+
+    addLote(loteData) {
+        const lote = {
+            number: loteData.number,
+            quantity: parseFloat(loteData.quantity),
+            expiry: loteData.expiry
+        };
+        
+        this.currentLotes.push(lote);
+        this.renderLotes();
+    }
+
+    editLote(index, loteData) {
+        if (index >= 0 && index < this.currentLotes.length) {
+            this.currentLotes[index] = {
+                number: loteData.number,
+                quantity: parseFloat(loteData.quantity),
+                expiry: loteData.expiry
+            };
+            this.renderLotes();
+        }
+    }
+
+    removeLote(index) {
+        if (index >= 0 && index < this.currentLotes.length) {
+            this.currentLotes.splice(index, 1);
+            this.renderLotes();
+        }
+    }
+
+    renderLotes() {
+        const lotesList = document.getElementById('lotesList');
+        if (lotesList) {
+            if (this.currentLotes.length === 0) {
+                lotesList.innerHTML = '<div class="empty-lotes">Nenhum lote adicionado</div>';
+            } else {
+                lotesList.innerHTML = this.currentLotes.map((lote, index) => {
+                    const expiryStatus = this.getExpiryStatus(lote.expiry);
+                    return `
+                        <div class="lote-item">
+                            <div class="lote-info">
+                                <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
+                                <div class="lote-quantity">Quantidade: ${this.formatNumber(lote.quantity)}</div>
+                            </div>
+                            <div class="lote-expiry">
+                                <div class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</div>
+                                <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
+                            </div>
+                            <div class="lote-actions">
+                                <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditLoteModal(${index})">Editar</button>
+                                <button type="button" class="btn-remove-lote" onclick="window.inventorySystem.removeLote(${index})">Remover</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    }
+
+    calculateTotalQuantity() {
+        return this.currentLotes.reduce((total, lote) => total + (lote.quantity || 0), 0);
+    }
+
+    getProductExpiryStatus(lotes) {
+        if (!lotes || lotes.length === 0) {
+            return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
+        }
+        
+        const today = new Date();
+        let closestExpiry = null;
+        let minDays = Infinity;
+        
+        lotes.forEach(lote => {
+            if (lote.expiry) {
+                const expiry = new Date(lote.expiry);
+                const diffTime = expiry - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < minDays) {
+                    minDays = diffDays;
+                    closestExpiry = lote.expiry;
+                }
+            }
+        });
+        
+        if (closestExpiry) {
+            return this.getExpiryStatus(closestExpiry);
+        }
+        
+        return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
+    }
+
     // ===================== Tab Management =====================
     switchTab(tabName) {
         if (!this.currentUser) {
@@ -293,14 +435,12 @@ class InventorySystem {
 
         console.log("Aba atual:", tabName);
         
-        // Atualizar botões das abas
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('active');
         });
         const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
         if (targetButton) targetButton.classList.add('active');
         
-        // Atualizar conteúdo das abas
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.remove('active');
         });
@@ -309,7 +449,6 @@ class InventorySystem {
         
         this.currentTab = tabName;
         
-        // Renderizar conteúdo específico da aba
         if (tabName === 'products') {
             this.render();
         } else if (tabName === 'requisition') {
@@ -321,16 +460,18 @@ class InventorySystem {
         }
     }
 
-    // ===================== Product Management =====================
+    // ===================== Product Management (Modificado) =====================
     addProduct(productData) {
+        const totalQuantity = this.calculateTotalQuantity();
+        
         const product = {
             id: productData.code,
             name: productData.name,
             code: productData.code,
-            quantity: parseFloat(productData.quantity),
+            quantity: totalQuantity,
             local: productData.local,
             description: productData.description || '',
-            expiry: productData.expiry || '',
+            lotes: [...this.currentLotes],
             lastUpdated: new Date().toLocaleDateString("pt-BR")
         };
 
@@ -340,19 +481,24 @@ class InventorySystem {
         this.updateStats();
         this.updateDashboard();
         this.populateLocationFilter();
+        
+        this.currentLotes = [];
+        this.renderLotes();
     }
 
     editProduct(productId, productData) {
         const index = this.products.findIndex(p => p.id === productId);
         if (index !== -1) {
+            const totalQuantity = this.calculateTotalQuantity();
+            
             this.products[index] = {
                 ...this.products[index],
                 name: productData.name,
                 code: productData.code,
-                quantity: parseFloat(productData.quantity),
+                quantity: totalQuantity,
                 local: productData.local,
                 description: productData.description || '',
-                expiry: productData.expiry || '',
+                lotes: [...this.currentLotes],
                 lastUpdated: new Date().toLocaleDateString("pt-BR")
             };
             this.saveToFirestore(this.products[index]);
@@ -360,6 +506,9 @@ class InventorySystem {
             this.updateStats();
             this.updateDashboard();
             this.populateLocationFilter();
+            
+            this.currentLotes = [];
+            this.renderLotes();
         }
     }
 
@@ -382,7 +531,7 @@ class InventorySystem {
         
         if (diffDays < 0) {
             return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
-        } else if (diffDays <= 90) { // 3 meses = ~90 dias
+        } else if (diffDays <= 90) {
             return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
         } else {
             return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
@@ -416,7 +565,7 @@ class InventorySystem {
         const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         const quantity = product.quantity ?? 0;
         const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
-        const expiryStatus = this.getExpiryStatus(product.expiry);
+        const expiryStatus = this.getProductExpiryStatus(product.lotes);
         
         return `
         <div class="product-item" data-id="${product.id}">
@@ -434,7 +583,7 @@ class InventorySystem {
             </div>
             <div class="product-details">
                 <div class="product-detail">
-                    <div class="product-detail-label">Quantidade</div>
+                    <div class="product-detail-label">Quantidade Total</div>
                     <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${this.formatNumber(quantity)}</span></div>
                 </div>
                 <div class="product-detail">
@@ -442,15 +591,11 @@ class InventorySystem {
                     <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
                 </div>
                 <div class="product-detail">
-                    <div class="product-detail-label">Validade</div>
+                    <div class="product-detail-label">Status Validade</div>
                     <div class="product-detail-value">
-                        ${product.expiry ? `
-                            <span class="expiry-status ${expiryStatus.class}">
-                                ${expiryStatus.label}
-                            </span>
-                            <br>
-                            <small>${new Date(product.expiry).toLocaleDateString('pt-BR')}</small>
-                        ` : '<span class="text-muted">Não informado</span>'}
+                        <span class="expiry-status ${expiryStatus.class}">
+                            ${expiryStatus.label}
+                        </span>
                     </div>
                 </div>
                 <div class="product-detail">
@@ -464,6 +609,24 @@ class InventorySystem {
                 </div>
                 ` : ''}
             </div>
+            ${product.lotes && product.lotes.length > 0 ? `
+            <div class="product-lotes">
+                <div class="product-detail-label">Lotes do Produto</div>
+                <div class="lote-summary">
+                    ${product.lotes.map(lote => {
+                        const loteExpiryStatus = this.getExpiryStatus(lote.expiry);
+                        return `
+                            <div class="lote-badge">
+                                <span class="lote-number">${this.escapeHtml(lote.number)}</span>
+                                <span class="lote-quantity">${this.formatNumber(lote.quantity)}</span>
+                                <span class="expiry-badge ${loteExpiryStatus.class}">${loteExpiryStatus.label}</span>
+                                <small>${new Date(lote.expiry).toLocaleDateString('pt-BR')}</small>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
         </div>`;
     }
 
@@ -477,11 +640,9 @@ class InventorySystem {
         if (confirmModal && deleteProductName && confirmDelete && cancelDelete && modalOverlay) {
             deleteProductName.textContent = productName;
             
-            // Mostrar modal
             confirmModal.classList.add('active');
             modalOverlay.classList.add('active');
             
-            // Configurar eventos
             const handleConfirm = () => {
                 this.deleteProduct(productId);
                 this.closeConfirmModal();
@@ -525,7 +686,6 @@ class InventorySystem {
             const totalRequisitions = this.requisitions.length;
             const pendingRequisitions = this.requisitions.filter(r => r.status === 'Pendente').length;
             
-            // Análise de validade dos produtos
             const expiryAnalysis = {
                 conforme: 0,
                 atencao: 0,
@@ -534,7 +694,7 @@ class InventorySystem {
             };
             
             this.products.forEach(product => {
-                const status = this.getExpiryStatus(product.expiry);
+                const status = this.getProductExpiryStatus(product.lotes);
                 switch (status.status) {
                     case 'conforme': expiryAnalysis.conforme++; break;
                     case 'atencao': expiryAnalysis.atencao++; break;
@@ -543,7 +703,6 @@ class InventorySystem {
                 }
             });
             
-            // Produtos por setor
             const productsByLocation = {};
             this.products.forEach(product => {
                 const location = product.local || 'Sem setor';
@@ -686,14 +845,12 @@ class InventorySystem {
             return;
         }
 
-        // Valida se todas as quantidades foram preenchidas
         for (const product of this.selectedProductsForRequisition) {
             if (!product.requestedQuantity || product.requestedQuantity <= 0) {
                 alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
                 return;
             }
             
-            // Valida se a quantidade requisitada não excede o estoque
             if (product.requestedQuantity > product.availableQuantity) {
                 alert(`Quantidade requisitada (${this.formatNumber(product.requestedQuantity)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
                 return;
@@ -718,12 +875,10 @@ class InventorySystem {
             status: 'Pendente',
             createdAt: new Date().toISOString(),
             createdBy: this.currentUser?.email || 'Sistema',
-            // Garantir que todos os campos opcionais tenham valores padrão
             description: document.getElementById('requisitionDescription')?.value || '',
             local: document.getElementById('requisitionLocal')?.value || ''
         };
 
-        // Remover campos undefined explicitamente
         Object.keys(requisition).forEach(key => {
             if (requisition[key] === undefined) {
                 delete requisition[key];
@@ -735,7 +890,6 @@ class InventorySystem {
         this.renderRequisitions();
         this.updateDashboard();
 
-        // Limpar seleção
         this.selectedProductsForRequisition = [];
         this.updateSelectedProductsDisplay();
         this.closeRequisitionModal();
@@ -839,7 +993,6 @@ class InventorySystem {
             const finalizedQuantitiesPerItem = {};
             let totalFinalizedQuantity = 0;
 
-            // Coletar quantidades finalizadas por item
             const inputs = document.querySelectorAll(`#requisitionsList div[data-id="${requisitionId}"] .finalized-qty-input`);
             for (const input of inputs) {
                 const productId = input.dataset.productId;
@@ -853,10 +1006,9 @@ class InventorySystem {
             }
 
             requisition.status = 'Finalizado';
-            requisition.finalizedQuantity = totalFinalizedQuantity; // Total geral
-            requisition.finalizedQuantitiesPerItem = finalizedQuantitiesPerItem; // Quantidades por item
+            requisition.finalizedQuantity = totalFinalizedQuantity;
+            requisition.finalizedQuantitiesPerItem = finalizedQuantitiesPerItem;
 
-            // Atualizar estoque para cada produto na requisição
             for (const reqProduct of requisition.products) {
                 const productId = reqProduct.id;
                 const finalizedQty = finalizedQuantitiesPerItem[productId] ?? 0;
@@ -871,7 +1023,7 @@ class InventorySystem {
 
             await this.saveRequisitionToFirestore(requisition);
             this.renderRequisitions();
-            this.render(); // Atualizar a lista de produtos
+            this.render();
             alert("Requisição finalizada com sucesso!");
         }
     }
@@ -895,7 +1047,6 @@ class InventorySystem {
             alert("Apenas requisições pendentes podem ser editadas.");
             return;
         }
-        // Preencher modal de requisição com os dados existentes
         const form = document.getElementById('requisitionForm');
         if (form) {
             const localInput = form.querySelector('#requisitionLocal');
@@ -904,13 +1055,11 @@ class InventorySystem {
             const descriptionInput = form.querySelector('#requisitionDescription');
             if (descriptionInput) descriptionInput.value = requisition.description ?? '';
             
-            // Se houver um campo de quantidade estimada, preenchê-lo
             const estimatedQuantityInput = document.getElementById('estimatedQuantity');
             if (estimatedQuantityInput && requisition.estimatedQuantity) {
                 estimatedQuantityInput.value = requisition.estimatedQuantity;
             }
             
-            // Selecionar produtos existentes
             this.selectedProductsForRequisition = requisition.products.map(p => ({
                 id: p.id,
                 name: p.name,
@@ -922,7 +1071,6 @@ class InventorySystem {
             }));
             this.updateSelectedProductsDisplay();
             
-            // Guardar o ID da requisição para edição
             form.dataset.editingRequisitionId = requisitionId;
             const modalTitle = document.getElementById('modalTitle');
             if (modalTitle) modalTitle.textContent = 'Editar Requisição';
@@ -992,17 +1140,15 @@ class InventorySystem {
         const locationFilter = document.getElementById('locationFilter');
         
         if (availableProductsList) {
-            // Atualizar o filtro de locais
             this.updateLocationFilterInModal();
             
-            // Filtrar produtos baseado no local selecionado
             const selectedLocation = locationFilter ? locationFilter.value : '';
             const filteredProducts = selectedLocation ? 
                 this.products.filter(product => product.local === selectedLocation) : 
                 this.products;
             
             availableProductsList.innerHTML = filteredProducts.map(product => {
-                const expiryStatus = this.getExpiryStatus(product.expiry);
+                const expiryStatus = this.getProductExpiryStatus(product.lotes);
                 const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
                 
                 return `
@@ -1013,13 +1159,10 @@ class InventorySystem {
                             <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
                             <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
                             <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
-                            <div>Validade: 
-                                ${product.expiry ? `
-                                    <span class="expiry-status ${expiryStatus.class}">
-                                        ${expiryStatus.label}
-                                    </span>
-                                    <small>(${new Date(product.expiry).toLocaleDateString('pt-BR')})</small>
-                                ` : '<span class="text-muted">Não informado</span>'}
+                            <div>Status Validade: 
+                                <span class="expiry-status ${expiryStatus.class}">
+                                    ${expiryStatus.label}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1044,7 +1187,6 @@ class InventorySystem {
             `;
             }).join('');
 
-            // Adicionar event listeners para os checkboxes
             availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', (e) => {
                     const productId = e.target.value;
@@ -1062,7 +1204,6 @@ class InventorySystem {
                 });
             });
 
-            // Adicionar event listeners para os inputs de quantidade
             availableProductsList.querySelectorAll('.request-quantity-input').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const productId = e.target.dataset.productId;
@@ -1087,7 +1228,6 @@ class InventorySystem {
             locationFilter.innerHTML = '<option value="">Todos os setores</option>' +
                 locations.map(location => `<option value="${this.escapeHtml(location)}" ${currentValue === location ? 'selected' : ''}>${this.escapeHtml(location)}</option>`).join('');
             
-            // Remover event listeners anteriores e adicionar novo
             const newLocationFilter = locationFilter.cloneNode(true);
             locationFilter.parentNode.replaceChild(newLocationFilter, locationFilter);
             
@@ -1142,13 +1282,10 @@ class InventorySystem {
                                     <div>Código: ${this.escapeHtml(item.code)}</div>
                                     <div>Setor: ${this.escapeHtml(item.local)}</div>
                                     <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
-                                    <div>Validade: 
-                                        ${item.expiry ? `
-                                            <span class="expiry-status ${expiryStatus.class}">
-                                                ${expiryStatus.label}
-                                            </span>
-                                            <small>(${new Date(item.expiry).toLocaleDateString('pt-BR')})</small>
-                                        ` : '<span class="text-muted">Não informado</span>'}
+                                    <div>Status Validade: 
+                                        <span class="expiry-status ${expiryStatus.class}">
+                                            ${expiryStatus.label}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -1167,7 +1304,6 @@ class InventorySystem {
                     `;
                 }).join('');
 
-                // Adicionar event listeners para os inputs de quantidade
                 selectedProductsDiv.querySelectorAll('.quantity-input-detailed').forEach(input => {
                     input.addEventListener('change', (e) => {
                         const productId = e.target.dataset.productId;
@@ -1187,7 +1323,6 @@ class InventorySystem {
         }
     }
 
-    // Método auxiliar para atualizar quantidade
     updateProductQuantity(productId, quantity) {
         const productIndex = this.selectedProductsForRequisition.findIndex(p => p.id === productId);
         if (productIndex !== -1) {
@@ -1223,8 +1358,6 @@ class InventorySystem {
             alert("Você não pode excluir seu próprio usuário ADM.");
             return;
         }
-        // Adicionar lógica para deletar usuário do Firebase Auth (requer ambiente de admin)
-        // Por enquanto, vamos apenas deletar do Firestore
         await this.deleteUserFromFirestore(uid);
         alert("Usuário deletado com sucesso!");
         this.renderUsers();
@@ -1290,7 +1423,7 @@ class InventorySystem {
             });
         });
 
-        // Modals - Botões principais
+        // Modais - Botões principais
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.addEventListener('click', () => this.openAddProductModal());
         
@@ -1300,7 +1433,7 @@ class InventorySystem {
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) addUserBtn.addEventListener('click', () => this.openAddUserModal());
 
-        // Modals - Botões de fechar
+        // Modais - Botões de fechar
         const closeModal = document.getElementById('closeModal');
         if (closeModal) closeModal.addEventListener('click', () => this.closeProductModal());
         
@@ -1313,7 +1446,7 @@ class InventorySystem {
         const closeUserModal = document.getElementById('closeUserModal');
         if (closeUserModal) closeUserModal.addEventListener('click', () => this.closeUserModal());
 
-        // Modals - Botões de cancelar
+        // Modais - Botões de cancelar
         const cancelBtn = document.getElementById('cancelBtn');
         if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeProductModal());
         
@@ -1325,6 +1458,36 @@ class InventorySystem {
         
         const cancelUserBtn = document.getElementById('cancelUserBtn');
         if (cancelUserBtn) cancelUserBtn.addEventListener('click', () => this.closeUserModal());
+
+        // Lotes
+        const addLoteBtn = document.getElementById('addLoteBtn');
+        if (addLoteBtn) addLoteBtn.addEventListener('click', () => this.openAddLoteModal());
+        
+        const closeLoteModal = document.getElementById('closeLoteModal');
+        if (closeLoteModal) closeLoteModal.addEventListener('click', () => this.closeLoteModal());
+        
+        const cancelLoteBtn = document.getElementById('cancelLoteBtn');
+        if (cancelLoteBtn) cancelLoteBtn.addEventListener('click', () => this.closeLoteModal());
+
+        const loteForm = document.getElementById('loteForm');
+        if (loteForm) {
+            loteForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const loteIndex = document.getElementById('loteIndex') ? document.getElementById('loteIndex').value : '';
+                const loteData = {
+                    number: e.target.loteNumber.value,
+                    quantity: e.target.loteQuantity.value,
+                    expiry: e.target.loteExpiry.value
+                };
+                
+                if (loteIndex !== '' && this.editingLoteIndex !== -1) {
+                    this.editLote(this.editingLoteIndex, loteData);
+                } else {
+                    this.addLote(loteData);
+                }
+                this.closeLoteModal();
+            });
+        }
 
         // Seleção de produtos
         const selectProductsBtn = document.getElementById('selectProductsBtn');
@@ -1342,10 +1505,8 @@ class InventorySystem {
                 const productData = {
                     name: e.target.productName.value,
                     code: e.target.productCode.value,
-                    quantity: e.target.productQuantity.value,
                     local: e.target.productLocation.value,
-                    description: e.target.productDescription.value,
-                    expiry: e.target.productExpiry ? e.target.productExpiry.value : '' // CAPTURAR VALIDADE
+                    description: e.target.productDescription.value
                 };
                 if (productId) {
                     this.editProduct(productId, productData);
@@ -1392,7 +1553,7 @@ class InventorySystem {
             }
         });
 
-        // Filter by Location (apenas para a página principal)
+        // Filter by Location
         const mainLocationFilter = document.querySelector('#productsTab #locationFilter');
         if (mainLocationFilter) mainLocationFilter.addEventListener('change', () => this.render());
 
@@ -1424,10 +1585,7 @@ class InventorySystem {
             const details = item.querySelector('.available-product-details').textContent.toLowerCase();
             const location = item.dataset.location || '';
             
-            // Verificar se o item corresponde ao filtro de busca
             const matchesSearch = name.includes(term) || details.includes(term);
-            
-            // Verificar se o item corresponde ao filtro de local
             const matchesLocation = !selectedLocation || location === selectedLocation;
             
             if (matchesSearch && matchesLocation) {
@@ -1444,6 +1602,7 @@ class InventorySystem {
         this.closeProductSelectionModal();
         this.closeUserModal();
         this.closeConfirmModal();
+        this.closeLoteModal();
     }
 
     openAddProductModal() {
@@ -1452,6 +1611,9 @@ class InventorySystem {
         
         const productId = document.getElementById('productId');
         if (productId) productId.value = '';
+        
+        this.currentLotes = [];
+        this.renderLotes();
         
         const modalTitle = document.getElementById('modalTitle');
         if (modalTitle) modalTitle.textContent = 'Adicionar Produto';
@@ -1477,22 +1639,14 @@ class InventorySystem {
             const productCodeInput = document.getElementById('productCode');
             if (productCodeInput) productCodeInput.value = product.code ?? '';
             
-            const productQuantityInput = document.getElementById('productQuantity');
-            if (productQuantityInput) productQuantityInput.value = product.quantity ?? 0;
-            
             const productLocationInput = document.getElementById('productLocation');
             if (productLocationInput) productLocationInput.value = product.local ?? '';
             
             const productDescriptionInput = document.getElementById('productDescription');
             if (productDescriptionInput) productDescriptionInput.value = product.description ?? '';
             
-            // PREENCHER CAMPO DE VALIDADE
-            const productExpiryInput = document.getElementById('productExpiry');
-            if (productExpiryInput && product.expiry) {
-                // Formatar a data para o input type="date" (YYYY-MM-DD)
-                const expiryDate = new Date(product.expiry);
-                productExpiryInput.value = expiryDate.toISOString().split('T')[0];
-            }
+            this.currentLotes = product.lotes ? [...product.lotes] : [];
+            this.renderLotes();
             
             const modalTitle = document.getElementById('modalTitle');
             if (modalTitle) modalTitle.textContent = 'Editar Produto';
