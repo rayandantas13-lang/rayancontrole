@@ -39,7 +39,13 @@
             <header>
                 <h1>Sistema de Controle de Estoque</h1>
                 <p>Gerenciamento de Almoxarifado</p>
-                <button type="button" id="logoutBtn" class="btn-secondary logout-btn">Sair</button>
+                <div class="menu-dropdown">
+                    <button type="button" id="menuBtn" class="btn-secondary">Menu</button>
+                    <div class="menu-dropdown-content">
+                        <button type="button" id="reportBtn">RELATÓRIO</button>
+                        <button type="button" id="logoutBtn">SAIR</button>
+                    </div>
+                </div>
             </header>
 
             <main>
@@ -257,6 +263,49 @@
     </div>
 
     <!-- Modal para Adicionar/Editar Usuário -->
+    <!-- Modal de Relatório -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gerar Relatório</h3>
+                <button type="button" id="closeReportModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body report-options">
+                <div class="form-group">
+                    <label for="reportType">Tipo de Relatório</label>
+                    <select id="reportType">
+                        <option value="stock">Produtos em Estoque</option>
+                        <option value="requisition">Requisições Realizadas</option>
+                        <option value="both">Estoque e Requisições</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="startDate">Período de Atualização (Início)</label>
+                    <input type="date" id="startDate">
+                </div>
+                
+                <div class="form-group">
+                    <label for="endDate">Período de Atualização (Fim)</label>
+                    <input type="date" id="endDate">
+                </div>
+
+                <div class="form-group">
+                    <label for="reportFormat">Formato</label>
+                    <select id="reportFormat">
+                        <option value="excel">Excel (Simples)</option>
+                        <option value="pdf">PDF (Colorido e Bonito)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="report-actions">
+                <button type="button" id="cancelReportBtn" class="btn-secondary">Cancelar</button>
+                <button type="button" id="generateReportBtn" class="btn-primary">Gerar Relatório</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar/Editar Usuário -->
     <div id="userModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -296,6 +345,6 @@
     <div id="modalOverlay" class="modal-overlay"></div>
     
     <!-- Script principal -->
-    <script type="module" src="script.js"></script>   
+    <script src="script.js"></script>   
 </body>
 </html>
