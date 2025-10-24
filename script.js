@@ -27,23 +27,23 @@ class InventorySystem {
         this.currentTab = 'products';
         this.nextRequisitionNumber = 1;
         this.currentUser = null;
-        this.userRole = 'guest';
-        this.currentLotes = []; // Array para armazenar lotes temporários
-        this.editingLoteIndex = -1; // Índice do lote sendo editado
+        this.userRole = 'guest'; // guest, normal, subadm, admin
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
-        await this.setupAuthListener();
+        await this.setupAuthListener(); // Configura o listener de autenticação primeiro
     }
 
     // ===================== Utilitários de Formatação =====================
     formatNumber(number, decimalPlaces = 0) {
         if (number === null || number === undefined) return '0';
         
+        // Arredonda para no máximo 3 casas decimais
         const rounded = Number(number).toFixed(decimalPlaces);
         
+        // Formata com separador de milhares
         return Number(rounded).toLocaleString('pt-BR', {
             minimumFractionDigits: 0,
             maximumFractionDigits: decimalPlaces
@@ -54,6 +54,7 @@ class InventorySystem {
         if (!date) return '';
         
         const d = new Date(date);
+        // Formata como: 10/10/2025 - 08:46
         return d.toLocaleDateString('pt-BR') + ' - ' + 
                d.toLocaleTimeString('pt-BR', { 
                    hour: '2-digit', 
@@ -68,25 +69,28 @@ class InventorySystem {
             onAuthStateChanged(auth, async (user) => {
                 this.currentUser = user;
                 if (user) {
+                    // Carregar o papel do usuário do Firestore
                     const userDocRef = doc(db, "users", user.uid);
                     const userDoc = await getDoc(userDocRef);
                     if (userDoc.exists()) {
                         this.userRole = userDoc.data().role;
                     } else {
+                        // Se o usuário existe no Auth mas não no Firestore, pode ser um novo registro
+                        // ou um usuário com papel padrão (normal)
                         this.userRole = 'normal';
                         await setDoc(userDocRef, { email: user.email, role: this.userRole });
                     }
                     console.log("Usuário logado:", user.email, "Papel:", this.userRole);
                     document.getElementById("loginPage").style.display = "none";
                     document.getElementById("mainApp").style.display = "block";
-                    await this.loadFromFirestore();
+                    await this.loadFromFirestore(); // Carregar dados após login
                     await this.loadRequisitionsFromFirestore();
                 } else {
                     this.userRole = 'guest';
                     console.log("Usuário deslogado.");
                     document.getElementById("loginPage").style.display = "flex";
                     document.getElementById("mainApp").style.display = "none";
-                    this.products = [];
+                    this.products = []; // Limpar dados se deslogado
                     this.requisitions = [];
                 }
                 this.applyPermissions();
@@ -124,17 +128,21 @@ class InventorySystem {
         const isSubAdm = this.userRole === 'subadm';
         const isNormalUser = this.userRole === 'normal';
 
+        // Gerenciamento de Usuários (apenas ADM)
         const userManagementTabBtn = document.getElementById('userManagementTabBtn');
         if (userManagementTabBtn) userManagementTabBtn.style.display = isAdmin ? 'block' : 'none';
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) addUserBtn.style.display = isAdmin ? 'block' : 'none';
 
+        // Adicionar Item (ADM e SubAdm)
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
 
+        // Gerar Nova Requisição (Todos, mas com campos específicos para cada um)
         const generateRequisitionBtn = document.getElementById('generateRequisitionBtn');
         if (generateRequisitionBtn) generateRequisitionBtn.style.display = (isAdmin || isSubAdm || isNormalUser) ? 'block' : 'none';
 
+        // Campos de requisição (descrição vs quantidade estimada)
         const requisitionDescriptionLabel = document.querySelector('#requisitionModal label[for="requisitionDescription"]');
         const requisitionDescriptionInput = document.getElementById('requisitionDescription');
         const estimatedQuantityLabel = document.querySelector('#requisitionModal label[for="estimatedQuantity"]');
@@ -154,6 +162,7 @@ class InventorySystem {
             if (estimatedQuantityInput) estimatedQuantityInput.removeAttribute('required');
         }
 
+        // Atualizar renderização para aplicar permissões nos itens da lista
         this.render();
         this.renderRequisitions();
         this.renderUsers();
@@ -209,14 +218,17 @@ class InventorySystem {
 
     async saveRequisitionToFirestore(requisition) {
         try {
+            // Limpar objeto antes de salvar
             const cleanRequisition = JSON.parse(JSON.stringify(requisition));
             
+            // Remover campos undefined/null
             Object.keys(cleanRequisition).forEach(key => {
                 if (cleanRequisition[key] === undefined || cleanRequisition[key] === null) {
                     delete cleanRequisition[key];
                 }
             });
             
+            // Limpar produtos também
             if (cleanRequisition.products) {
                 cleanRequisition.products = cleanRequisition.products.map(product => {
                     const cleanProduct = { ...product };
@@ -272,160 +284,6 @@ class InventorySystem {
         }
     }
 
-    // ===================== Gerenciamento de Lotes =====================
-    openAddLoteModal() {
-        const loteForm = document.getElementById('loteForm');
-        if (loteForm) loteForm.reset();
-        
-        const loteIndex = document.getElementById('loteIndex');
-        if (loteIndex) loteIndex.value = '';
-        
-        const loteModalTitle = document.getElementById('loteModalTitle');
-        if (loteModalTitle) loteModalTitle.textContent = 'Adicionar Lote';
-        
-        this.editingLoteIndex = -1;
-        
-        const loteModal = document.getElementById('loteModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (loteModal && modalOverlay) {
-            loteModal.classList.add('active');
-            modalOverlay.classList.add('active');
-        }
-    }
-
-    openEditLoteModal(index) {
-        const lote = this.currentLotes[index];
-        if (lote) {
-            const loteIndex = document.getElementById('loteIndex');
-            if (loteIndex) loteIndex.value = index;
-            
-            const loteNumber = document.getElementById('loteNumber');
-            if (loteNumber) loteNumber.value = lote.number || '';
-            
-            const loteQuantity = document.getElementById('loteQuantity');
-            if (loteQuantity) loteQuantity.value = lote.quantity || 0;
-            
-            const loteExpiry = document.getElementById('loteExpiry');
-            if (loteExpiry && lote.expiry) {
-                const expiryDate = new Date(lote.expiry);
-                loteExpiry.value = expiryDate.toISOString().split('T')[0];
-            }
-            
-            const loteModalTitle = document.getElementById('loteModalTitle');
-            if (loteModalTitle) loteModalTitle.textContent = 'Editar Lote';
-            
-            this.editingLoteIndex = index;
-            
-            const loteModal = document.getElementById('loteModal');
-            const modalOverlay = document.getElementById('modalOverlay');
-            
-            if (loteModal && modalOverlay) {
-                loteModal.classList.add('active');
-                modalOverlay.classList.add('active');
-            }
-        }
-    }
-
-    closeLoteModal() {
-        const loteModal = document.getElementById('loteModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (loteModal) loteModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    addLote(loteData) {
-        const lote = {
-            number: loteData.number,
-            quantity: parseFloat(loteData.quantity),
-            expiry: loteData.expiry
-        };
-        
-        this.currentLotes.push(lote);
-        this.renderLotes();
-    }
-
-    editLote(index, loteData) {
-        if (index >= 0 && index < this.currentLotes.length) {
-            this.currentLotes[index] = {
-                number: loteData.number,
-                quantity: parseFloat(loteData.quantity),
-                expiry: loteData.expiry
-            };
-            this.renderLotes();
-        }
-    }
-
-    removeLote(index) {
-        if (index >= 0 && index < this.currentLotes.length) {
-            this.currentLotes.splice(index, 1);
-            this.renderLotes();
-        }
-    }
-
-    renderLotes() {
-        const lotesList = document.getElementById('lotesList');
-        if (lotesList) {
-            if (this.currentLotes.length === 0) {
-                lotesList.innerHTML = '<div class="empty-lotes">Nenhum lote adicionado</div>';
-            } else {
-                lotesList.innerHTML = this.currentLotes.map((lote, index) => {
-                    const expiryStatus = this.getExpiryStatus(lote.expiry);
-                    return `
-                        <div class="lote-item">
-                            <div class="lote-info">
-                                <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
-                                <div class="lote-quantity">Quantidade: ${this.formatNumber(lote.quantity)}</div>
-                            </div>
-                            <div class="lote-expiry">
-                                <div class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</div>
-                                <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
-                            </div>
-                            <div class="lote-actions">
-                                <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditLoteModal(${index})">Editar</button>
-                                <button type="button" class="btn-remove-lote" onclick="window.inventorySystem.removeLote(${index})">Remover</button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-    }
-
-    calculateTotalQuantity() {
-        return this.currentLotes.reduce((total, lote) => total + (lote.quantity || 0), 0);
-    }
-
-    getProductExpiryStatus(lotes) {
-        if (!lotes || lotes.length === 0) {
-            return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-        }
-        
-        const today = new Date();
-        let closestExpiry = null;
-        let minDays = Infinity;
-        
-        lotes.forEach(lote => {
-            if (lote.expiry) {
-                const expiry = new Date(lote.expiry);
-                const diffTime = expiry - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                if (diffDays < minDays) {
-                    minDays = diffDays;
-                    closestExpiry = lote.expiry;
-                }
-            }
-        });
-        
-        if (closestExpiry) {
-            return this.getExpiryStatus(closestExpiry);
-        }
-        
-        return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-    }
-
     // ===================== Tab Management =====================
     switchTab(tabName) {
         if (!this.currentUser) {
@@ -435,12 +293,14 @@ class InventorySystem {
 
         console.log("Aba atual:", tabName);
         
+        // Atualizar botões das abas
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.remove('active');
         });
         const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
         if (targetButton) targetButton.classList.add('active');
         
+        // Atualizar conteúdo das abas
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.remove('active');
         });
@@ -449,6 +309,7 @@ class InventorySystem {
         
         this.currentTab = tabName;
         
+        // Renderizar conteúdo específico da aba
         if (tabName === 'products') {
             this.render();
         } else if (tabName === 'requisition') {
@@ -460,18 +321,16 @@ class InventorySystem {
         }
     }
 
-    // ===================== Product Management (Modificado) =====================
+    // ===================== Product Management =====================
     addProduct(productData) {
-        const totalQuantity = this.calculateTotalQuantity();
-        
         const product = {
             id: productData.code,
             name: productData.name,
             code: productData.code,
-            quantity: totalQuantity,
+            quantity: parseFloat(productData.quantity),
             local: productData.local,
             description: productData.description || '',
-            lotes: [...this.currentLotes],
+            expiry: productData.expiry || '',
             lastUpdated: new Date().toLocaleDateString("pt-BR")
         };
 
@@ -481,24 +340,19 @@ class InventorySystem {
         this.updateStats();
         this.updateDashboard();
         this.populateLocationFilter();
-        
-        this.currentLotes = [];
-        this.renderLotes();
     }
 
     editProduct(productId, productData) {
         const index = this.products.findIndex(p => p.id === productId);
         if (index !== -1) {
-            const totalQuantity = this.calculateTotalQuantity();
-            
             this.products[index] = {
                 ...this.products[index],
                 name: productData.name,
                 code: productData.code,
-                quantity: totalQuantity,
+                quantity: parseFloat(productData.quantity),
                 local: productData.local,
                 description: productData.description || '',
-                lotes: [...this.currentLotes],
+                expiry: productData.expiry || '',
                 lastUpdated: new Date().toLocaleDateString("pt-BR")
             };
             this.saveToFirestore(this.products[index]);
@@ -506,9 +360,6 @@ class InventorySystem {
             this.updateStats();
             this.updateDashboard();
             this.populateLocationFilter();
-            
-            this.currentLotes = [];
-            this.renderLotes();
         }
     }
 
@@ -531,7 +382,7 @@ class InventorySystem {
         
         if (diffDays < 0) {
             return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
-        } else if (diffDays <= 90) {
+        } else if (diffDays <= 90) { // 3 meses = ~90 dias
             return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
         } else {
             return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
@@ -565,7 +416,7 @@ class InventorySystem {
         const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         const quantity = product.quantity ?? 0;
         const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
-        const expiryStatus = this.getProductExpiryStatus(product.lotes);
+        const expiryStatus = this.getExpiryStatus(product.expiry);
         
         return `
         <div class="product-item" data-id="${product.id}">
@@ -583,7 +434,7 @@ class InventorySystem {
             </div>
             <div class="product-details">
                 <div class="product-detail">
-                    <div class="product-detail-label">Quantidade Total</div>
+                    <div class="product-detail-label">Quantidade</div>
                     <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${this.formatNumber(quantity)}</span></div>
                 </div>
                 <div class="product-detail">
@@ -591,11 +442,15 @@ class InventorySystem {
                     <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
                 </div>
                 <div class="product-detail">
-                    <div class="product-detail-label">Status Validade</div>
+                    <div class="product-detail-label">Validade</div>
                     <div class="product-detail-value">
-                        <span class="expiry-status ${expiryStatus.class}">
-                            ${expiryStatus.label}
-                        </span>
+                        ${product.expiry ? `
+                            <span class="expiry-status ${expiryStatus.class}">
+                                ${expiryStatus.label}
+                            </span>
+                            <br>
+                            <small>${new Date(product.expiry).toLocaleDateString('pt-BR')}</small>
+                        ` : '<span class="text-muted">Não informado</span>'}
                     </div>
                 </div>
                 <div class="product-detail">
@@ -609,24 +464,6 @@ class InventorySystem {
                 </div>
                 ` : ''}
             </div>
-            ${product.lotes && product.lotes.length > 0 ? `
-            <div class="product-lotes">
-                <div class="product-detail-label">Lotes do Produto</div>
-                <div class="lote-summary">
-                    ${product.lotes.map(lote => {
-                        const loteExpiryStatus = this.getExpiryStatus(lote.expiry);
-                        return `
-                            <div class="lote-badge">
-                                <span class="lote-number">${this.escapeHtml(lote.number)}</span>
-                                <span class="lote-quantity">${this.formatNumber(lote.quantity)}</span>
-                                <span class="expiry-badge ${loteExpiryStatus.class}">${loteExpiryStatus.label}</span>
-                                <small>${new Date(lote.expiry).toLocaleDateString('pt-BR')}</small>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-            ` : ''}
         </div>`;
     }
 
@@ -640,9 +477,11 @@ class InventorySystem {
         if (confirmModal && deleteProductName && confirmDelete && cancelDelete && modalOverlay) {
             deleteProductName.textContent = productName;
             
+            // Mostrar modal
             confirmModal.classList.add('active');
             modalOverlay.classList.add('active');
             
+            // Configurar eventos
             const handleConfirm = () => {
                 this.deleteProduct(productId);
                 this.closeConfirmModal();
@@ -686,6 +525,7 @@ class InventorySystem {
             const totalRequisitions = this.requisitions.length;
             const pendingRequisitions = this.requisitions.filter(r => r.status === 'Pendente').length;
             
+            // Análise de validade dos produtos
             const expiryAnalysis = {
                 conforme: 0,
                 atencao: 0,
@@ -694,7 +534,7 @@ class InventorySystem {
             };
             
             this.products.forEach(product => {
-                const status = this.getProductExpiryStatus(product.lotes);
+                const status = this.getExpiryStatus(product.expiry);
                 switch (status.status) {
                     case 'conforme': expiryAnalysis.conforme++; break;
                     case 'atencao': expiryAnalysis.atencao++; break;
@@ -703,6 +543,7 @@ class InventorySystem {
                 }
             });
             
+            // Produtos por setor
             const productsByLocation = {};
             this.products.forEach(product => {
                 const location = product.local || 'Sem setor';
@@ -845,12 +686,14 @@ class InventorySystem {
             return;
         }
 
+        // Valida se todas as quantidades foram preenchidas
         for (const product of this.selectedProductsForRequisition) {
             if (!product.requestedQuantity || product.requestedQuantity <= 0) {
                 alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
                 return;
             }
             
+            // Valida se a quantidade requisitada não excede o estoque
             if (product.requestedQuantity > product.availableQuantity) {
                 alert(`Quantidade requisitada (${this.formatNumber(product.requestedQuantity)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
                 return;
@@ -875,10 +718,12 @@ class InventorySystem {
             status: 'Pendente',
             createdAt: new Date().toISOString(),
             createdBy: this.currentUser?.email || 'Sistema',
+            // Garantir que todos os campos opcionais tenham valores padrão
             description: document.getElementById('requisitionDescription')?.value || '',
             local: document.getElementById('requisitionLocal')?.value || ''
         };
 
+        // Remover campos undefined explicitamente
         Object.keys(requisition).forEach(key => {
             if (requisition[key] === undefined) {
                 delete requisition[key];
@@ -890,6 +735,7 @@ class InventorySystem {
         this.renderRequisitions();
         this.updateDashboard();
 
+        // Limpar seleção
         this.selectedProductsForRequisition = [];
         this.updateSelectedProductsDisplay();
         this.closeRequisitionModal();
@@ -993,6 +839,7 @@ class InventorySystem {
             const finalizedQuantitiesPerItem = {};
             let totalFinalizedQuantity = 0;
 
+            // Coletar quantidades finalizadas por item
             const inputs = document.querySelectorAll(`#requisitionsList div[data-id="${requisitionId}"] .finalized-qty-input`);
             for (const input of inputs) {
                 const productId = input.dataset.productId;
@@ -1006,9 +853,10 @@ class InventorySystem {
             }
 
             requisition.status = 'Finalizado';
-            requisition.finalizedQuantity = totalFinalizedQuantity;
-            requisition.finalizedQuantitiesPerItem = finalizedQuantitiesPerItem;
+            requisition.finalizedQuantity = totalFinalizedQuantity; // Total geral
+            requisition.finalizedQuantitiesPerItem = finalizedQuantitiesPerItem; // Quantidades por item
 
+            // Atualizar estoque para cada produto na requisição
             for (const reqProduct of requisition.products) {
                 const productId = reqProduct.id;
                 const finalizedQty = finalizedQuantitiesPerItem[productId] ?? 0;
@@ -1023,7 +871,7 @@ class InventorySystem {
 
             await this.saveRequisitionToFirestore(requisition);
             this.renderRequisitions();
-            this.render();
+            this.render(); // Atualizar a lista de produtos
             alert("Requisição finalizada com sucesso!");
         }
     }
@@ -1047,6 +895,7 @@ class InventorySystem {
             alert("Apenas requisições pendentes podem ser editadas.");
             return;
         }
+        // Preencher modal de requisição com os dados existentes
         const form = document.getElementById('requisitionForm');
         if (form) {
             const localInput = form.querySelector('#requisitionLocal');
@@ -1055,11 +904,13 @@ class InventorySystem {
             const descriptionInput = form.querySelector('#requisitionDescription');
             if (descriptionInput) descriptionInput.value = requisition.description ?? '';
             
+            // Se houver um campo de quantidade estimada, preenchê-lo
             const estimatedQuantityInput = document.getElementById('estimatedQuantity');
             if (estimatedQuantityInput && requisition.estimatedQuantity) {
                 estimatedQuantityInput.value = requisition.estimatedQuantity;
             }
             
+            // Selecionar produtos existentes
             this.selectedProductsForRequisition = requisition.products.map(p => ({
                 id: p.id,
                 name: p.name,
@@ -1071,6 +922,7 @@ class InventorySystem {
             }));
             this.updateSelectedProductsDisplay();
             
+            // Guardar o ID da requisição para edição
             form.dataset.editingRequisitionId = requisitionId;
             const modalTitle = document.getElementById('modalTitle');
             if (modalTitle) modalTitle.textContent = 'Editar Requisição';
@@ -1140,15 +992,17 @@ class InventorySystem {
         const locationFilter = document.getElementById('locationFilter');
         
         if (availableProductsList) {
+            // Atualizar o filtro de locais
             this.updateLocationFilterInModal();
             
+            // Filtrar produtos baseado no local selecionado
             const selectedLocation = locationFilter ? locationFilter.value : '';
             const filteredProducts = selectedLocation ? 
                 this.products.filter(product => product.local === selectedLocation) : 
                 this.products;
             
             availableProductsList.innerHTML = filteredProducts.map(product => {
-                const expiryStatus = this.getProductExpiryStatus(product.lotes);
+                const expiryStatus = this.getExpiryStatus(product.expiry);
                 const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
                 
                 return `
@@ -1159,10 +1013,13 @@ class InventorySystem {
                             <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
                             <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
                             <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
-                            <div>Status Validade: 
-                                <span class="expiry-status ${expiryStatus.class}">
-                                    ${expiryStatus.label}
-                                </span>
+                            <div>Validade: 
+                                ${product.expiry ? `
+                                    <span class="expiry-status ${expiryStatus.class}">
+                                        ${expiryStatus.label}
+                                    </span>
+                                    <small>(${new Date(product.expiry).toLocaleDateString('pt-BR')})</small>
+                                ` : '<span class="text-muted">Não informado</span>'}
                             </div>
                         </div>
                     </div>
@@ -1187,6 +1044,7 @@ class InventorySystem {
             `;
             }).join('');
 
+            // Adicionar event listeners para os checkboxes
             availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', (e) => {
                     const productId = e.target.value;
@@ -1204,6 +1062,7 @@ class InventorySystem {
                 });
             });
 
+            // Adicionar event listeners para os inputs de quantidade
             availableProductsList.querySelectorAll('.request-quantity-input').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const productId = e.target.dataset.productId;
@@ -1228,6 +1087,7 @@ class InventorySystem {
             locationFilter.innerHTML = '<option value="">Todos os setores</option>' +
                 locations.map(location => `<option value="${this.escapeHtml(location)}" ${currentValue === location ? 'selected' : ''}>${this.escapeHtml(location)}</option>`).join('');
             
+            // Remover event listeners anteriores e adicionar novo
             const newLocationFilter = locationFilter.cloneNode(true);
             locationFilter.parentNode.replaceChild(newLocationFilter, locationFilter);
             
@@ -1282,10 +1142,13 @@ class InventorySystem {
                                     <div>Código: ${this.escapeHtml(item.code)}</div>
                                     <div>Setor: ${this.escapeHtml(item.local)}</div>
                                     <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
-                                    <div>Status Validade: 
-                                        <span class="expiry-status ${expiryStatus.class}">
-                                            ${expiryStatus.label}
-                                        </span>
+                                    <div>Validade: 
+                                        ${item.expiry ? `
+                                            <span class="expiry-status ${expiryStatus.class}">
+                                                ${expiryStatus.label}
+                                            </span>
+                                            <small>(${new Date(item.expiry).toLocaleDateString('pt-BR')})</small>
+                                        ` : '<span class="text-muted">Não informado</span>'}
                                     </div>
                                 </div>
                             </div>
@@ -1304,6 +1167,7 @@ class InventorySystem {
                     `;
                 }).join('');
 
+                // Adicionar event listeners para os inputs de quantidade
                 selectedProductsDiv.querySelectorAll('.quantity-input-detailed').forEach(input => {
                     input.addEventListener('change', (e) => {
                         const productId = e.target.dataset.productId;
@@ -1323,6 +1187,7 @@ class InventorySystem {
         }
     }
 
+    // Método auxiliar para atualizar quantidade
     updateProductQuantity(productId, quantity) {
         const productIndex = this.selectedProductsForRequisition.findIndex(p => p.id === productId);
         if (productIndex !== -1) {
@@ -1358,6 +1223,8 @@ class InventorySystem {
             alert("Você não pode excluir seu próprio usuário ADM.");
             return;
         }
+        // Adicionar lógica para deletar usuário do Firebase Auth (requer ambiente de admin)
+        // Por enquanto, vamos apenas deletar do Firestore
         await this.deleteUserFromFirestore(uid);
         alert("Usuário deletado com sucesso!");
         this.renderUsers();
@@ -1399,53 +1266,31 @@ class InventorySystem {
         </div>`;
     }
 
-    // ===================== MENU E RELATÓRIOS =====================
+    // ===================== UI and Utilities =====================
     setupEventListeners() {
-        // Menu
-        const menuToggle = document.getElementById('menuToggle');
-        if (menuToggle) {
-            menuToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleMenu();
+        // Login
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = e.target.loginEmail.value;
+                const password = e.target.loginPassword.value;
+                this.login(email, password);
             });
         }
 
-        // Fechar menu ao clicar fora
-        document.addEventListener('click', () => {
-            this.closeMenu();
-        });
-
-        // Itens do menu
-        const reportBtn = document.getElementById('reportBtn');
-        if (reportBtn) reportBtn.addEventListener('click', () => this.openReportModal());
-
+        // Logout
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) logoutBtn.addEventListener('click', () => this.logout());
 
-        // Modal de relatório
-        const closeReportModal = document.getElementById('closeReportModal');
-        if (closeReportModal) closeReportModal.addEventListener('click', () => this.closeReportModal());
-        
-        const cancelReportBtn = document.getElementById('cancelReportBtn');
-        if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => this.closeReportModal());
-
-        const dateRange = document.getElementById('dateRange');
-        if (dateRange) dateRange.addEventListener('change', () => this.toggleCustomDateRange());
-
-        const reportForm = document.getElementById('reportForm');
-        if (reportForm) {
-            reportForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.generateReport();
+        // Tabs
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                this.switchTab(button.dataset.tab);
             });
-        }
+        });
 
-        const reportType = document.getElementById('reportType');
-        if (reportType) {
-            reportType.addEventListener('change', () => this.toggleReportOptions());
-        }
-
-        // Modais - Botões principais
+        // Modals - Botões principais
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.addEventListener('click', () => this.openAddProductModal());
         
@@ -1455,7 +1300,7 @@ class InventorySystem {
         const addUserBtn = document.getElementById('addUserBtn');
         if (addUserBtn) addUserBtn.addEventListener('click', () => this.openAddUserModal());
 
-        // Modais - Botões de fechar
+        // Modals - Botões de fechar
         const closeModal = document.getElementById('closeModal');
         if (closeModal) closeModal.addEventListener('click', () => this.closeProductModal());
         
@@ -1468,7 +1313,7 @@ class InventorySystem {
         const closeUserModal = document.getElementById('closeUserModal');
         if (closeUserModal) closeUserModal.addEventListener('click', () => this.closeUserModal());
 
-        // Modais - Botões de cancelar
+        // Modals - Botões de cancelar
         const cancelBtn = document.getElementById('cancelBtn');
         if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeProductModal());
         
@@ -1480,36 +1325,6 @@ class InventorySystem {
         
         const cancelUserBtn = document.getElementById('cancelUserBtn');
         if (cancelUserBtn) cancelUserBtn.addEventListener('click', () => this.closeUserModal());
-
-        // Lotes
-        const addLoteBtn = document.getElementById('addLoteBtn');
-        if (addLoteBtn) addLoteBtn.addEventListener('click', () => this.openAddLoteModal());
-        
-        const closeLoteModal = document.getElementById('closeLoteModal');
-        if (closeLoteModal) closeLoteModal.addEventListener('click', () => this.closeLoteModal());
-        
-        const cancelLoteBtn = document.getElementById('cancelLoteBtn');
-        if (cancelLoteBtn) cancelLoteBtn.addEventListener('click', () => this.closeLoteModal());
-
-        const loteForm = document.getElementById('loteForm');
-        if (loteForm) {
-            loteForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const loteIndex = document.getElementById('loteIndex') ? document.getElementById('loteIndex').value : '';
-                const loteData = {
-                    number: e.target.loteNumber.value,
-                    quantity: e.target.loteQuantity.value,
-                    expiry: e.target.loteExpiry.value
-                };
-                
-                if (loteIndex !== '' && this.editingLoteIndex !== -1) {
-                    this.editLote(this.editingLoteIndex, loteData);
-                } else {
-                    this.addLote(loteData);
-                }
-                this.closeLoteModal();
-            });
-        }
 
         // Seleção de produtos
         const selectProductsBtn = document.getElementById('selectProductsBtn');
@@ -1527,8 +1342,10 @@ class InventorySystem {
                 const productData = {
                     name: e.target.productName.value,
                     code: e.target.productCode.value,
+                    quantity: e.target.productQuantity.value,
                     local: e.target.productLocation.value,
-                    description: e.target.productDescription.value
+                    description: e.target.productDescription.value,
+                    expiry: e.target.productExpiry ? e.target.productExpiry.value : '' // CAPTURAR VALIDADE
                 };
                 if (productId) {
                     this.editProduct(productId, productData);
@@ -1575,7 +1392,7 @@ class InventorySystem {
             }
         });
 
-        // Filter by Location
+        // Filter by Location (apenas para a página principal)
         const mainLocationFilter = document.querySelector('#productsTab #locationFilter');
         if (mainLocationFilter) mainLocationFilter.addEventListener('change', () => this.render());
 
@@ -1596,1115 +1413,48 @@ class InventorySystem {
         }
     }
 
-    toggleMenu() {
-        const menuDropdown = document.getElementById('headerMenuDropdown');
-        if (menuDropdown) {
-            menuDropdown.classList.toggle('show');
-        }
-    }
-
-    closeMenu() {
-        const menuDropdown = document.getElementById('headerMenuDropdown');
-        if (menuDropdown) {
-            menuDropdown.classList.remove('show');
-        }
-    }
-
-    openReportModal() {
-        this.closeMenu();
+    filterAvailableProducts(searchTerm) {
+        const availableProductItems = document.querySelectorAll('.available-product-item');
+        const locationFilter = document.getElementById('locationFilter');
+        const selectedLocation = locationFilter ? locationFilter.value : '';
+        const term = searchTerm.toLowerCase();
         
-        const reportForm = document.getElementById('reportForm');
-        if (reportForm) reportForm.reset();
-        
-        // Definir datas padrão
-        const today = new Date().toISOString().split('T')[0];
-        const startDate = document.getElementById('startDate');
-        const endDate = document.getElementById('endDate');
-        if (startDate) startDate.value = today;
-        if (endDate) endDate.value = today;
-        
-        this.toggleReportOptions();
-        
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal && modalOverlay) {
-            reportModal.classList.add('active');
-            modalOverlay.classList.add('active');
-        }
-    }
-
-    closeReportModal() {
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal) reportModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    toggleCustomDateRange() {
-        const dateRange = document.getElementById('dateRange');
-        const customDateRange = document.getElementById('customDateRange');
-        
-        if (dateRange && customDateRange) {
-            if (dateRange.value === 'custom') {
-                customDateRange.style.display = 'grid';
+        availableProductItems.forEach(item => {
+            const name = item.querySelector('.available-product-name').textContent.toLowerCase();
+            const details = item.querySelector('.available-product-details').textContent.toLowerCase();
+            const location = item.dataset.location || '';
+            
+            // Verificar se o item corresponde ao filtro de busca
+            const matchesSearch = name.includes(term) || details.includes(term);
+            
+            // Verificar se o item corresponde ao filtro de local
+            const matchesLocation = !selectedLocation || location === selectedLocation;
+            
+            if (matchesSearch && matchesLocation) {
+                item.style.display = 'flex';
             } else {
-                customDateRange.style.display = 'none';
+                item.style.display = 'none';
             }
-        }
-    }
-
-    toggleReportOptions() {
-        const reportType = document.getElementById('reportType');
-        const includeLotesSection = document.getElementById('includeLotesSection');
-        const includeExpirySection = document.getElementById('includeExpirySection');
-        
-        if (reportType && includeLotesSection && includeExpirySection) {
-            if (reportType.value === 'requisitions') {
-                includeLotesSection.style.display = 'none';
-                includeExpirySection.style.display = 'none';
-            } else {
-                includeLotesSection.style.display = 'block';
-                includeExpirySection.style.display = 'block';
-            }
-        }
-    }
-
-    // ===================== GERAÇÃO DE RELATÓRIOS =====================
-    async generateReport() {
-        const reportType = document.getElementById('reportType').value;
-        const dateRange = document.getElementById('dateRange').value;
-        const reportFormat = document.getElementById('reportFormat').value;
-        const includeLotes = document.getElementById('includeLotes')?.checked || false;
-        const includeExpiry = document.getElementById('includeExpiry')?.checked || false;
-        const startDate = document.getElementById('startDate')?.value;
-        const endDate = document.getElementById('endDate')?.value;
-
-        // Validar período personalizado
-        if (dateRange === 'custom' && (!startDate || !endDate)) {
-            alert('Por favor, selecione ambas as datas para o período personalizado.');
-            return;
-        }
-
-        // Mostrar loading
-        const generateBtn = document.getElementById('generateReportBtn');
-        const originalText = generateBtn.textContent;
-        generateBtn.innerHTML = '<div class="spinner"></div> Gerando...';
-        generateBtn.disabled = true;
-
-        try {
-            // Filtrar dados baseado no período
-            const filteredData = await this.filterDataByDateRange(reportType, dateRange, startDate, endDate);
-            
-            if (reportFormat === 'pdf') {
-                await this.generatePDFReport(reportType, filteredData, includeLotes, includeExpiry);
-            } else {
-                await this.generateExcelReport(reportType, filteredData, includeLotes, includeExpiry);
-            }
-            
-            this.closeReportModal();
-        } catch (error) {
-            console.error('Erro ao gerar relatório:', error);
-            alert('Erro ao gerar relatório: ' + error.message);
-        } finally {
-            // Restaurar botão
-            generateBtn.textContent = originalText;
-            generateBtn.disabled = false;
-        }
-    }
-
-    async filterDataByDateRange(reportType, dateRange, startDate, endDate) {
-        let filteredData = {};
-        
-        if (reportType === 'products' || reportType === 'all') {
-            filteredData.products = this.products;
-        }
-        
-        if (reportType === 'requisitions' || reportType === 'all') {
-            let requisitions = this.requisitions;
-            
-            if (dateRange !== 'all') {
-                const filterDate = this.getFilterDate(dateRange, startDate, endDate);
-                requisitions = requisitions.filter(req => {
-                    const reqDate = new Date(req.createdAt);
-                    return reqDate >= filterDate.start && reqDate <= filterDate.end;
-                });
-            }
-            
-            filteredData.requisitions = requisitions;
-        }
-        
-        return filteredData;
-    }
-
-    getFilterDate(dateRange, startDate, endDate) {
-        const today = new Date();
-        let start = new Date();
-        let end = new Date();
-        
-        switch (dateRange) {
-            case 'today':
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'week':
-                start.setDate(today.getDate() - today.getDay());
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'month':
-                start.setDate(1);
-                start.setHours(0, 0, 0, 0);
-                end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'quarter':
-                const quarter = Math.floor(today.getMonth() / 3);
-                start = new Date(today.getFullYear(), quarter * 3, 1);
-                end = new Date(today.getFullYear(), quarter * 3 + 3, 0);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'year':
-                start = new Date(today.getFullYear(), 0, 1);
-                end = new Date(today.getFullYear(), 11, 31);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'custom':
-                start = new Date(startDate);
-                end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                break;
-            default:
-                start = new Date(0); // Data mínima
-                end = new Date(); // Data atual
-        }
-        
-        return { start, end };
-    }
-
-    // Importar módulos do Firebase v9
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
-
-// Suas credenciais do Firebase (versão 9)
-const firebaseConfig = {
-  apiKey: "AIzaSyBUhJcWkeMYqxNzg8c7VaFt-LmzGVZ5_yQ",
-  authDomain: "almoxarifado-348d5.firebaseapp.com",
-  projectId: "almoxarifado-348d5",
-  storageBucket: "almoxarifado-348d5.firebasestorage.app",
-  messagingSenderId: "295782162128",
-  appId: "1:295782162128:web:7567d6605d20db5f3cc8d5",
-  measurementId: "G-PC0FREL2DF"
-};
-
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-class InventorySystem {
-    constructor() {
-        this.products = [];
-        this.requisitions = [];
-        this.selectedProductsForRequisition = [];
-        this.currentTab = 'products';
-        this.nextRequisitionNumber = 1;
-        this.currentUser = null;
-        this.userRole = 'guest';
-        this.currentLotes = [];
-        this.editingLoteIndex = -1;
-        this.init();
-    }
-
-    async init() {
-        this.setupEventListeners();
-        await this.setupAuthListener();
-    }
-
-    // ===================== Utilitários de Formatação =====================
-    formatNumber(number, decimalPlaces = 0) {
-        if (number === null || number === undefined) return '0';
-        const rounded = Number(number).toFixed(decimalPlaces);
-        return Number(rounded).toLocaleString('pt-BR', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: decimalPlaces
         });
     }
 
-    formatDateTime(date) {
-        if (!date) return '';
-        const d = new Date(date);
-        return d.toLocaleDateString('pt-BR') + ' - ' + 
-               d.toLocaleTimeString('pt-BR', { 
-                   hour: '2-digit', 
-                   minute: '2-digit',
-                   hour12: false 
-               });
-    }
-
-    // ===================== Authentication and Authorization =====================
-    async setupAuthListener() {
-        return new Promise((resolve) => {
-            onAuthStateChanged(auth, async (user) => {
-                this.currentUser = user;
-                if (user) {
-                    const userDocRef = doc(db, "users", user.uid);
-                    const userDoc = await getDoc(userDocRef);
-                    if (userDoc.exists()) {
-                        this.userRole = userDoc.data().role;
-                    } else {
-                        this.userRole = 'normal';
-                        await setDoc(userDocRef, { email: user.email, role: this.userRole });
-                    }
-                    console.log("Usuário logado:", user.email, "Papel:", this.userRole);
-                    document.getElementById("loginPage").style.display = "none";
-                    document.getElementById("mainApp").style.display = "block";
-                    await this.loadFromFirestore();
-                    await this.loadRequisitionsFromFirestore();
-                } else {
-                    this.userRole = 'guest';
-                    console.log("Usuário deslogado.");
-                    document.getElementById("loginPage").style.display = "flex";
-                    document.getElementById("mainApp").style.display = "none";
-                    this.products = [];
-                    this.requisitions = [];
-                }
-                this.applyPermissions();
-                this.render();
-                this.updateStats();
-                this.updateDashboard();
-                this.populateLocationFilter();
-                resolve();
-            });
-        });
-    }
-
-    async login(email, password) {
-        try {
-            await signInWithEmailAndPassword(auth, email, password);
-            alert("Login realizado com sucesso!");
-        } catch (error) {
-            console.error("Erro no login:", error);
-            alert("Erro no login: " + error.message);
-        }
-    }
-
-    async logout() {
-        try {
-            await signOut(auth);
-            alert("Logout realizado com sucesso!");
-        } catch (error) {
-            console.error("Erro no logout:", error);
-            alert("Erro no logout: " + error.message);
-        }
-    }
-
-    applyPermissions() {
-        const isAdmin = this.userRole === 'admin';
-        const isSubAdm = this.userRole === 'subadm';
-        const isNormalUser = this.userRole === 'normal';
-
-        const userManagementTabBtn = document.getElementById('userManagementTabBtn');
-        if (userManagementTabBtn) userManagementTabBtn.style.display = isAdmin ? 'block' : 'none';
-        const addUserBtn = document.getElementById('addUserBtn');
-        if (addUserBtn) addUserBtn.style.display = isAdmin ? 'block' : 'none';
-
-        const addItemBtn = document.getElementById('addItemBtn');
-        if (addItemBtn) addItemBtn.style.display = (isAdmin || isSubAdm) ? 'block' : 'none';
-
-        const generateRequisitionBtn = document.getElementById('generateRequisitionBtn');
-        if (generateRequisitionBtn) generateRequisitionBtn.style.display = (isAdmin || isSubAdm || isNormalUser) ? 'block' : 'none';
-
-        this.render();
-        this.renderRequisitions();
-        this.renderUsers();
-    }
-
-    // ===================== Firestore Operations =====================
-    async loadFromFirestore() {
-        try {
-            const productsCol = collection(db, "products");
-            const productSnapshot = await getDocs(productsCol);
-            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Produtos carregados do Firestore:", this.products.length);
-        } catch (error) {
-            console.error("Erro ao carregar dados do Firestore:", error);
-        }
-    }
-
-    async loadRequisitionsFromFirestore() {
-        try {
-            const requisitionsCol = collection(db, "requisitions");
-            const requisitionSnapshot = await getDocs(requisitionsCol);
-            this.requisitions = requisitionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Requisições carregadas do Firestore:", this.requisitions.length);
-        } catch (error) {
-            console.error("Erro ao carregar requisições do Firestore:", error);
-        }
-    }
-
-    async saveToFirestore(product) {
-        try {
-            await setDoc(doc(db, "products", product.id), product);
-            return true;
-        } catch (error) {
-            console.error("Erro ao salvar no Firestore:", error);
-            return false;
-        }
-    }
-
-    async deleteFromFirestore(productId) {
-        try {
-            await deleteDoc(doc(db, "products", productId));
-            return true;
-        } catch (error) {
-            console.error("Erro ao deletar do Firestore:", error);
-            return false;
-        }
-    }
-
-    async saveRequisitionToFirestore(requisition) {
-        try {
-            const cleanRequisition = JSON.parse(JSON.stringify(requisition));
-            Object.keys(cleanRequisition).forEach(key => {
-                if (cleanRequisition[key] === undefined || cleanRequisition[key] === null) {
-                    delete cleanRequisition[key];
-                }
-            });
-            
-            if (cleanRequisition.products) {
-                cleanRequisition.products = cleanRequisition.products.map(product => {
-                    const cleanProduct = { ...product };
-                    Object.keys(cleanProduct).forEach(key => {
-                        if (cleanProduct[key] === undefined || cleanProduct[key] === null) {
-                            delete cleanProduct[key];
-                        }
-                    });
-                    return cleanProduct;
-                });
-            }
-
-            await setDoc(doc(db, "requisitions", cleanRequisition.id), cleanRequisition);
-            return true;
-        } catch (error) {
-            console.error("Erro ao salvar requisição no Firestore:", error);
-            return false;
-        }
-    }
-
-    // ===================== Tab Management =====================
-    switchTab(tabName) {
-        if (!this.currentUser) {
-            alert("Por favor, faça login para acessar o sistema.");
-            return;
-        }
-
-        console.log("Aba atual:", tabName);
-        
-        // Atualizar botões das abas
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
-        if (targetButton) targetButton.classList.add('active');
-        
-        // Atualizar conteúdo das abas
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-        const targetTab = document.getElementById(`${tabName}Tab`);
-        if (targetTab) targetTab.classList.add('active');
-        
-        this.currentTab = tabName;
-        
-        // Renderizar conteúdo específico da aba
-        if (tabName === 'products') {
-            this.render();
-        } else if (tabName === 'requisition') {
-            this.renderRequisitions();
-        } else if (tabName === 'dashboard') {
-            this.updateDashboard();
-        } else if (tabName === 'userManagement') {
-            this.renderUsers();
-        }
-    }
-
-    // ===================== Product Management =====================
-    addProduct(productData) {
-        const totalQuantity = this.calculateTotalQuantity();
-        
-        const product = {
-            id: productData.code,
-            name: productData.name,
-            code: productData.code,
-            quantity: totalQuantity,
-            local: productData.local,
-            description: productData.description || '',
-            lotes: [...this.currentLotes],
-            lastUpdated: new Date().toLocaleDateString("pt-BR")
-        };
-
-        this.products.push(product);
-        this.saveToFirestore(product);
-        this.render();
-        this.updateStats();
-        this.updateDashboard();
-        this.populateLocationFilter();
-        
-        this.currentLotes = [];
-        this.renderLotes();
-    }
-
-    editProduct(productId, productData) {
-        const index = this.products.findIndex(p => p.id === productId);
-        if (index !== -1) {
-            const totalQuantity = this.calculateTotalQuantity();
-            
-            this.products[index] = {
-                ...this.products[index],
-                name: productData.name,
-                code: productData.code,
-                quantity: totalQuantity,
-                local: productData.local,
-                description: productData.description || '',
-                lotes: [...this.currentLotes],
-                lastUpdated: new Date().toLocaleDateString("pt-BR")
-            };
-            this.saveToFirestore(this.products[index]);
-            this.render();
-            this.updateStats();
-            this.updateDashboard();
-            this.populateLocationFilter();
-            
-            this.currentLotes = [];
-            this.renderLotes();
-        }
-    }
-
-    deleteProduct(productId) {
-        this.products = this.products.filter(p => p.id !== productId);
-        this.deleteFromFirestore(productId);
-        this.render();
-        this.updateStats();
-        this.updateDashboard();
-        this.populateLocationFilter();
-    }
-
-    getExpiryStatus(expiryDate) {
-        if (!expiryDate) return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-        
-        const today = new Date();
-        const expiry = new Date(expiryDate);
-        const diffTime = expiry - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays < 0) {
-            return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
-        } else if (diffDays <= 90) {
-            return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
-        } else {
-            return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
-        }
-    }
-
-    render() {
-        const productsList = document.getElementById("productsList");
-        const emptyState = document.getElementById("emptyState");
-        const searchInput = document.getElementById("searchInput");
-        const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-
-        const filteredProducts = this.products.filter(product =>
-            (product.name ?? '').toLowerCase().includes(searchTerm) ||
-            (product.code ?? '').toLowerCase().includes(searchTerm) ||
-            (product.local ?? '').toLowerCase().includes(searchTerm)
-        );
-
-        if (productsList) {
-            if (filteredProducts.length === 0) {
-                if (emptyState) emptyState.style.display = "block";
-                productsList.innerHTML = "";
-            } else {
-                if (emptyState) emptyState.style.display = "none";
-                productsList.innerHTML = filteredProducts.map(product => this.createProductHTML(product)).join('');
-            }
-        }
-    }
-
-    createProductHTML(product) {
-        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
-        const quantity = product.quantity ?? 0;
-        const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
-        const expiryStatus = this.getProductExpiryStatus(product.lotes);
-        
-        return `
-        <div class="product-item" data-id="${product.id}">
-            <div class="product-header">
-                <div class="product-info">
-                    <h3>${this.escapeHtml(product.name ?? '')}</h3>
-                    <span class="product-code">Código: ${this.escapeHtml(product.code ?? '')}</span>
-                </div>
-                ${isAdmOrSubAdm ? `
-                <div class="product-actions">
-                    <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditProductModal('${product.id}')">Editar</button>
-                    <button type="button" class="btn-delete" onclick="window.inventorySystem.confirmDeleteProduct('${product.id}', '${this.escapeHtml(product.name ?? '')}')">Excluir</button>
-                </div>
-                ` : ''}
-            </div>
-            <div class="product-details">
-                <div class="product-detail">
-                    <div class="product-detail-label">Quantidade Total</div>
-                    <div class="product-detail-value"><span class="quantity-badge ${quantityClass}">${this.formatNumber(quantity)}</span></div>
-                </div>
-                <div class="product-detail">
-                    <div class="product-detail-label">Setor</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
-                </div>
-                <div class="product-detail">
-                    <div class="product-detail-label">Status Validade</div>
-                    <div class="product-detail-value">
-                        <span class="expiry-status ${expiryStatus.class}">
-                            ${expiryStatus.label}
-                        </span>
-                    </div>
-                </div>
-                <div class="product-detail">
-                    <div class="product-detail-label">Última Atualização</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated ?? '')}</div>
-                </div>
-                ${product.description ? `
-                <div class="product-detail">
-                    <div class="product-detail-label">Descrição</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.description)}</div>
-                </div>
-                ` : ''}
-            </div>
-            ${product.lotes && product.lotes.length > 0 ? `
-            <div class="product-lotes">
-                <div class="product-detail-label">Lotes do Produto</div>
-                <div class="lote-summary">
-                    ${product.lotes.map(lote => {
-                        const loteExpiryStatus = this.getExpiryStatus(lote.expiry);
-                        return `
-                            <div class="lote-badge">
-                                <span class="lote-number">${this.escapeHtml(lote.number)}</span>
-                                <span class="lote-quantity">${this.formatNumber(lote.quantity)}</span>
-                                <span class="expiry-badge ${loteExpiryStatus.class}">${loteExpiryStatus.label}</span>
-                                <small>${new Date(lote.expiry).toLocaleDateString('pt-BR')}</small>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-            ` : ''}
-        </div>`;
-    }
-
-    // ===================== Requisition Management =====================
-    async generateRequisition(event) {
-        event.preventDefault();
-        
-        if (this.selectedProductsForRequisition.length === 0) {
-            alert('Selecione pelo menos um produto para a requisição.');
-            return;
-        }
-
-        for (const product of this.selectedProductsForRequisition) {
-            if (!product.requestedQuantity || product.requestedQuantity <= 0) {
-                alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
-                return;
-            }
-            
-            if (product.requestedQuantity > product.availableQuantity) {
-                alert(`Quantidade requisitada (${this.formatNumber(product.requestedQuantity)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
-                return;
-            }
-        }
-
-        const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
-            sum + (product.requestedQuantity || 0), 0);
-
-        const requisition = {
-            id: Date.now().toString(),
-            products: this.selectedProductsForRequisition.map(product => ({
-                id: product.id,
-                name: product.name || '',
-                code: product.code || '',
-                setor: product.local || '',
-                requestedQuantity: product.requestedQuantity || 1,
-                availableQuantity: product.availableQuantity || 0,
-                expiry: product.expiry || null
-            })),
-            totalRequested: totalRequested,
-            status: 'Pendente',
-            createdAt: new Date().toISOString(),
-            createdBy: this.currentUser?.email || 'Sistema',
-            description: document.getElementById('requisitionDescription')?.value || '',
-            local: document.getElementById('requisitionLocal')?.value || ''
-        };
-
-        this.requisitions.push(requisition);
-        await this.saveRequisitionToFirestore(requisition);
-        this.renderRequisitions();
-        this.updateDashboard();
-
-        this.selectedProductsForRequisition = [];
-        this.updateSelectedProductsDisplay();
+    closeAllModals() {
+        this.closeProductModal();
         this.closeRequisitionModal();
-
-        alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
+        this.closeProductSelectionModal();
+        this.closeUserModal();
+        this.closeConfirmModal();
     }
 
-    renderRequisitions() {
-        const requisitionsList = document.getElementById("requisitionsList");
-        if (requisitionsList) {
-            if (this.requisitions.length === 0) {
-                requisitionsList.innerHTML = "<p>Nenhuma requisição realizada ainda.</p>";
-            } else {
-                requisitionsList.innerHTML = this.requisitions.map(requisition => this.createRequisitionHTML(requisition)).join('');
-            }
-        }
-    }
-
-    createRequisitionHTML(requisition) {
-        const isAdm = this.userRole === 'admin';
-        const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
-        const isPending = requisition.status === 'Pendente';
-        
-        return `
-        <div class="requisition-item" data-id="${requisition.id}">
-            <div class="requisition-header">
-                <div class="requisition-info">
-                    <h3>Requisição #${requisition.id}</h3>
-                    <span class="requisition-status status-${requisition.status.toLowerCase().replace('ê', 'e')}">
-                        ${requisition.status}
-                    </span>
-                </div>
-                <div class="requisition-meta">
-                    <span class="requisition-date">${this.formatDateTime(requisition.createdAt)}</span>
-                    <span class="requisition-user">por ${this.escapeHtml(requisition.createdBy)}</span>
-                </div>
-            </div>
-            <div class="requisition-details">
-                <div class="requisition-detail">
-                    <div class="requisition-detail-label">Total Requisitado</div>
-                    <div class="requisition-detail-value"><strong>${this.formatNumber(requisition.totalRequested ?? 0)} itens</strong></div>
-                </div>
-                <div class="requisition-detail">
-                    <div class="requisition-detail-label">Data</div>
-                    <div class="requisition-detail-value">${this.formatDateTime(requisition.createdAt)}</div>
-                </div>
-            </div>
-            <div class="requisition-products">
-                <h4>Produtos Requisitados (${requisition.products?.length ?? 0})</h4>
-                <ul class="requisition-products-list">
-                    ${(requisition.products ?? []).map(product => {
-                        const expiryStatus = this.getExpiryStatus(product.expiry);
-                        return `
-                            <li class="requisition-product-item">
-                                <div class="requisition-product-info">
-                                    <span class="requisition-product-name">${this.escapeHtml(product.name ?? '')}</span>
-                                    <div class="requisition-product-details">
-                                        <span>Código: ${this.escapeHtml(product.code ?? '')}</span>
-                                        <span>Setor: ${this.escapeHtml(product.setor ?? '')}</span>
-                                        <span>Requisitado: <strong>${this.formatNumber(product.requestedQuantity)}</strong></span>
-                                        <span>Disponível: ${this.formatNumber(product.availableQuantity)}</span>
-                                        ${product.expiry ? `
-                                            <span class="expiry-status ${expiryStatus.class}">
-                                                ${expiryStatus.label}
-                                            </span>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                                ${isAdmOrSubAdm && isPending ? `
-                                    <div class="supply-quantity-section">
-                                        <div class="supply-quantity-input">
-                                            <input type="number" class="finalized-qty-input" data-product-id="${product.id}" placeholder="Qtd real" min="0">
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                ${requisition.finalizedQuantitiesPerItem && requisition.finalizedQuantitiesPerItem[product.id] !== undefined ? `
-                                    <span class="supply-quantity-value">Fornecido: ${this.formatNumber(requisition.finalizedQuantitiesPerItem[product.id])}</span>
-                                ` : ''}
-                            </li>`;
-                    }).join('')}
-                </ul>
-            </div>
-            <div class="requisition-actions">
-                ${isAdmOrSubAdm && isPending ? `
-                    <button type="button" class="btn-primary" onclick="window.inventorySystem.finalizeRequisition('${requisition.id}')">Finalizar Requisição</button>
-                ` : ''}
-                ${isAdm ? `
-                    <button type="button" class="btn-delete" onclick="window.inventorySystem.confirmDeleteRequisition('${requisition.id}')">Excluir</button>
-                ` : ''}
-            </div>
-        </div>`;
-    }
-
-    // ===================== User Management =====================
-    async addUser(email, password, role) {
-        try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            await this.saveUserToFirestore(user.uid, email, role);
-            alert("Usuário adicionado com sucesso!");
-            this.renderUsers();
-        } catch (error) {
-            console.error("Erro ao adicionar usuário:", error);
-            alert("Erro ao adicionar usuário: " + error.message);
-        }
-    }
-
-    async renderUsers() {
-        const userList = document.getElementById("userList");
-        if (userList) {
-            try {
-                const usersCol = collection(db, "users");
-                const userSnapshot = await getDocs(usersCol);
-                const users = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                if (users.length === 0) {
-                    userList.innerHTML = '<p>Nenhum usuário cadastrado.</p>';
-                } else {
-                    userList.innerHTML = users.map(user => this.createUserHTML(user)).join('');
-                }
-            } catch (error) {
-                console.error("Erro ao renderizar usuários:", error);
-                userList.innerHTML = '<p>Erro ao carregar usuários.</p>';
-            }
-        }
-    }
-
-    createUserHTML(user) {
-        const isAdmin = this.userRole === 'admin';
-        return `
-        <div class="user-item">
-            <div class="user-info">
-                <h4>${this.escapeHtml(user.email ?? '')}</h4>
-                <p>Nível: <span class="user-role-badge ${user.role ?? 'normal'}">${this.escapeHtml(user.role ?? 'normal')}</span></p>
-            </div>
-            <div class="user-actions">
-                ${isAdmin && this.currentUser && this.currentUser.uid !== user.id ? `
-                    <button type="button" class="btn-delete" onclick="window.inventorySystem.deleteUser('${user.id}')">Excluir</button>
-                ` : ''}
-            </div>
-        </div>`;
-    }
-
-    // ===================== Gerenciamento de Lotes =====================
-    openAddLoteModal() {
-        const loteForm = document.getElementById('loteForm');
-        if (loteForm) loteForm.reset();
-        this.editingLoteIndex = -1;
-        
-        const loteModal = document.getElementById('loteModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (loteModal && modalOverlay) {
-            loteModal.classList.add('active');
-            modalOverlay.classList.add('active');
-        }
-    }
-
-    addLote(loteData) {
-        const lote = {
-            number: loteData.number,
-            quantity: parseFloat(loteData.quantity),
-            expiry: loteData.expiry
-        };
-        
-        this.currentLotes.push(lote);
-        this.renderLotes();
-    }
-
-    renderLotes() {
-        const lotesList = document.getElementById('lotesList');
-        if (lotesList) {
-            if (this.currentLotes.length === 0) {
-                lotesList.innerHTML = '<div class="empty-lotes">Nenhum lote adicionado</div>';
-            } else {
-                lotesList.innerHTML = this.currentLotes.map((lote, index) => {
-                    const expiryStatus = this.getExpiryStatus(lote.expiry);
-                    return `
-                        <div class="lote-item">
-                            <div class="lote-info">
-                                <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
-                                <div class="lote-quantity">Quantidade: ${this.formatNumber(lote.quantity)}</div>
-                            </div>
-                            <div class="lote-expiry">
-                                <div class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</div>
-                                <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
-                            </div>
-                            <div class="lote-actions">
-                                <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditLoteModal(${index})">Editar</button>
-                                <button type="button" class="btn-remove-lote" onclick="window.inventorySystem.removeLote(${index})">Remover</button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-    }
-
-    calculateTotalQuantity() {
-        return this.currentLotes.reduce((total, lote) => total + (lote.quantity || 0), 0);
-    }
-
-    getProductExpiryStatus(lotes) {
-        if (!lotes || lotes.length === 0) {
-            return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-        }
-        
-        const today = new Date();
-        let closestExpiry = null;
-        let minDays = Infinity;
-        
-        lotes.forEach(lote => {
-            if (lote.expiry) {
-                const expiry = new Date(lote.expiry);
-                const diffTime = expiry - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                if (diffDays < minDays) {
-                    minDays = diffDays;
-                    closestExpiry = lote.expiry;
-                }
-            }
-        });
-        
-        if (closestExpiry) {
-            return this.getExpiryStatus(closestExpiry);
-        }
-        
-        return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-    }
-
-    // ===================== RELATÓRIOS SIMPLIFICADOS =====================
-    async generateReport() {
-        const reportType = document.getElementById('reportType').value;
-        const reportFormat = document.getElementById('reportFormat').value;
-
-        // Mostrar loading
-        const generateBtn = document.getElementById('generateReportBtn');
-        const originalText = generateBtn.textContent;
-        generateBtn.innerHTML = '<div class="spinner"></div> Gerando...';
-        generateBtn.disabled = true;
-
-        try {
-            if (reportFormat === 'excel') {
-                await this.generateExcelReport(reportType);
-            } else {
-                // PDF não disponível - oferecer Excel
-                if (confirm('Relatório PDF não disponível no momento. Deseja gerar em formato Excel?')) {
-                    await this.generateExcelReport(reportType);
-                }
-            }
-            
-            this.closeReportModal();
-        } catch (error) {
-            console.error('Erro ao gerar relatório:', error);
-            alert('Erro ao gerar relatório: ' + error.message);
-        } finally {
-            // Restaurar botão
-            generateBtn.textContent = originalText;
-            generateBtn.disabled = false;
-        }
-    }
-
-    async generateExcelReport(reportType) {
-        // Criar dados básicos para Excel
-        let data = [];
-        
-        if (reportType === 'products' || reportType === 'all') {
-            data.push(['RELATÓRIO DE PRODUTOS EM ESTOQUE']);
-            data.push(['Gerado em:', new Date().toLocaleDateString('pt-BR')]);
-            data.push(['Usuário:', this.currentUser?.email || 'Sistema']);
-            data.push([]);
-            data.push(['Código', 'Nome', 'Setor', 'Quantidade', 'Status Validade', 'Última Atualização']);
-            
-            this.products.forEach(product => {
-                const expiryStatus = this.getProductExpiryStatus(product.lotes);
-                data.push([
-                    product.code || '',
-                    product.name || '',
-                    product.local || '',
-                    product.quantity || 0,
-                    expiryStatus.label,
-                    product.lastUpdated || ''
-                ]);
-            });
-        }
-
-        if (reportType === 'requisitions' || reportType === 'all') {
-            data.push([]);
-            data.push(['RELATÓRIO DE REQUISIÇÕES']);
-            data.push([]);
-            data.push(['ID', 'Data', 'Solicitante', 'Status', 'Total Itens']);
-            
-            this.requisitions.forEach(req => {
-                data.push([
-                    req.id,
-                    this.formatDateTime(req.createdAt),
-                    req.createdBy,
-                    req.status,
-                    req.totalRequested || 0
-                ]);
-            });
-        }
-
-        // Criar arquivo CSV (alternativa ao Excel)
-        const csvContent = data.map(row => 
-            row.map(cell => `"${cell}"`).join(',')
-        ).join('\n');
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute('href', url);
-        link.setAttribute('download', `relatorio_estoque_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        alert('Relatório gerado com sucesso! (Formato CSV)');
-    }
-
-    // ===================== UI and Utilities =====================
-    setupEventListeners() {
-        // === CORREÇÃO CRÍTICA: LISTENER DO LOGIN ===
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const email = e.target.loginEmail.value;
-                const password = e.target.loginPassword.value;
-                this.login(email, password);
-            });
-        }
-
-        // === CORREÇÃO DAS ABAS ===
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                this.switchTab(button.dataset.tab);
-            });
-        });
-
-        // Logout
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) logoutBtn.addEventListener('click', () => this.logout());
-
-        // Menu
-        const menuToggle = document.getElementById('menuToggle');
-        if (menuToggle) {
-            menuToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleMenu();
-            });
-        }
-
-        // Relatórios
-        const reportBtn = document.getElementById('reportBtn');
-        if (reportBtn) reportBtn.addEventListener('click', () => this.openReportModal());
-
-        const reportForm = document.getElementById('reportForm');
-        if (reportForm) {
-            reportForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.generateReport();
-            });
-        }
-
-        // Modais principais
-        const addItemBtn = document.getElementById('addItemBtn');
-        if (addItemBtn) addItemBtn.addEventListener('click', () => this.openAddProductModal());
-        
-        const generateRequisitionBtn = document.getElementById('generateRequisitionBtn');
-        if (generateRequisitionBtn) generateRequisitionBtn.addEventListener('click', () => this.openRequisitionModal());
-        
-        const addUserBtn = document.getElementById('addUserBtn');
-        if (addUserBtn) addUserBtn.addEventListener('click', () => this.openAddUserModal());
-
-        // Lotes
-        const addLoteBtn = document.getElementById('addLoteBtn');
-        if (addLoteBtn) addLoteBtn.addEventListener('click', () => this.openAddLoteModal());
-
-        // Forms
-        const productForm = document.getElementById('productForm');
-        if (productForm) {
-            productForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const productId = document.getElementById('productId') ? document.getElementById('productId').value : '';
-                const productData = {
-                    name: e.target.productName.value,
-                    code: e.target.productCode.value,
-                    local: e.target.productLocation.value,
-                    description: e.target.productDescription.value
-                };
-                if (productId) {
-                    this.editProduct(productId, productData);
-                } else {
-                    this.addProduct(productData);
-                }
-                this.closeProductModal();
-            });
-        }
-
-        const requisitionForm = document.getElementById('requisitionForm');
-        if (requisitionForm) {
-            requisitionForm.addEventListener('submit', (e) => {
-                this.generateRequisition(e);
-            });
-        }
-
-        // Fechar menu ao clicar fora
-        document.addEventListener('click', () => {
-            this.closeMenu();
-        });
-    }
-
-    toggleMenu() {
-        const menuDropdown = document.getElementById('headerMenuDropdown');
-        if (menuDropdown) {
-            menuDropdown.classList.toggle('show');
-        }
-    }
-
-    closeMenu() {
-        const menuDropdown = document.getElementById('headerMenuDropdown');
-        if (menuDropdown) {
-            menuDropdown.classList.remove('show');
-        }
-    }
-
-    openReportModal() {
-        this.closeMenu();
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal && modalOverlay) {
-            reportModal.classList.add('active');
-            modalOverlay.classList.add('active');
-        }
-    }
-
-    closeReportModal() {
-        const reportModal = document.getElementById('reportModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        
-        if (reportModal) reportModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    // Métodos auxiliares para modais (já existentes no seu código)
     openAddProductModal() {
         const productForm = document.getElementById('productForm');
         if (productForm) productForm.reset();
-        this.currentLotes = [];
-        this.renderLotes();
+        
+        const productId = document.getElementById('productId');
+        if (productId) productId.value = '';
+        
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) modalTitle.textContent = 'Adicionar Produto';
         
         const productModal = document.getElementById('productModal');
         const modalOverlay = document.getElementById('modalOverlay');
@@ -2715,11 +1465,68 @@ class InventorySystem {
         }
     }
 
+    openEditProductModal(productId) {
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+            const productIdInput = document.getElementById('productId');
+            if (productIdInput) productIdInput.value = product.id;
+            
+            const productNameInput = document.getElementById('productName');
+            if (productNameInput) productNameInput.value = product.name ?? '';
+            
+            const productCodeInput = document.getElementById('productCode');
+            if (productCodeInput) productCodeInput.value = product.code ?? '';
+            
+            const productQuantityInput = document.getElementById('productQuantity');
+            if (productQuantityInput) productQuantityInput.value = product.quantity ?? 0;
+            
+            const productLocationInput = document.getElementById('productLocation');
+            if (productLocationInput) productLocationInput.value = product.local ?? '';
+            
+            const productDescriptionInput = document.getElementById('productDescription');
+            if (productDescriptionInput) productDescriptionInput.value = product.description ?? '';
+            
+            // PREENCHER CAMPO DE VALIDADE
+            const productExpiryInput = document.getElementById('productExpiry');
+            if (productExpiryInput && product.expiry) {
+                // Formatar a data para o input type="date" (YYYY-MM-DD)
+                const expiryDate = new Date(product.expiry);
+                productExpiryInput.value = expiryDate.toISOString().split('T')[0];
+            }
+            
+            const modalTitle = document.getElementById('modalTitle');
+            if (modalTitle) modalTitle.textContent = 'Editar Produto';
+            
+            const productModal = document.getElementById('productModal');
+            const modalOverlay = document.getElementById('modalOverlay');
+            
+            if (productModal && modalOverlay) {
+                productModal.classList.add('active');
+                modalOverlay.classList.add('active');
+            }
+        }
+    }
+
+    closeProductModal() {
+        const productModal = document.getElementById('productModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (productModal) productModal.classList.remove('active');
+        if (modalOverlay) modalOverlay.classList.remove('active');
+    }
+
     openRequisitionModal() {
         const requisitionForm = document.getElementById('requisitionForm');
-        if (requisitionForm) requisitionForm.reset();
+        if (requisitionForm) {
+            requisitionForm.reset();
+            delete requisitionForm.dataset.editingRequisitionId;
+        }
+        
         this.selectedProductsForRequisition = [];
         this.updateSelectedProductsDisplay();
+        
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) modalTitle.textContent = 'Gerar Nova Requisição';
         
         const requisitionModal = document.getElementById('requisitionModal');
         const modalOverlay = document.getElementById('modalOverlay');
@@ -2730,9 +1537,23 @@ class InventorySystem {
         }
     }
 
+    closeRequisitionModal() {
+        const requisitionModal = document.getElementById("requisitionModal");
+        const modalOverlay = document.getElementById("modalOverlay");
+        
+        if (requisitionModal) requisitionModal.classList.remove("active");
+        if (modalOverlay) modalOverlay.classList.remove("active");
+        
+        this.selectedProductsForRequisition = [];
+        this.updateSelectedProductsDisplay();
+    }
+
     openAddUserModal() {
         const userForm = document.getElementById('userForm');
         if (userForm) userForm.reset();
+        
+        const userModalTitle = document.getElementById('userModalTitle');
+        if (userModalTitle) userModalTitle.textContent = 'Adicionar Usuário';
         
         const userModal = document.getElementById('userModal');
         const modalOverlay = document.getElementById('modalOverlay');
@@ -2743,72 +1564,12 @@ class InventorySystem {
         }
     }
 
-    closeProductModal() {
-        const productModal = document.getElementById('productModal');
-        const modalOverlay = document.getElementById('modalOverlay');
-        if (productModal) productModal.classList.remove('active');
-        if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    closeRequisitionModal() {
-        const requisitionModal = document.getElementById("requisitionModal");
-        const modalOverlay = document.getElementById("modalOverlay");
-        if (requisitionModal) requisitionModal.classList.remove("active");
-        if (modalOverlay) modalOverlay.classList.remove("active");
-    }
-
     closeUserModal() {
         const userModal = document.getElementById('userModal');
         const modalOverlay = document.getElementById('modalOverlay');
+        
         if (userModal) userModal.classList.remove('active');
         if (modalOverlay) modalOverlay.classList.remove('active');
-    }
-
-    updateStats() {
-        const totalItems = document.getElementById('totalItems');
-        if (totalItems) {
-            totalItems.textContent = `Total de itens: ${this.formatNumber(this.products.length)}`;
-        }
-    }
-
-    updateDashboard() {
-        const dashboardSection = document.querySelector('#dashboardTab .dashboard-section');
-        if (dashboardSection) {
-            const totalProducts = this.products.length;
-            const totalQuantity = this.products.reduce((sum, product) => sum + (product.quantity || 0), 0);
-            
-            dashboardSection.innerHTML = `
-                <h2>Dashboard de Estoque</h2>
-                <div class="dashboard-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon">📦</div>
-                        <div class="stat-info">
-                            <div class="stat-value">${this.formatNumber(totalProducts)}</div>
-                            <div class="stat-label">Total de Produtos</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📊</div>
-                        <div class="stat-info">
-                            <div class="stat-value">${this.formatNumber(totalQuantity)}</div>
-                            <div class="stat-label">Quantidade Total</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📋</div>
-                        <div class="stat-info">
-                            <div class="stat-value">${this.formatNumber(this.requisitions.length)}</div>
-                            <div class="stat-label">Total Requisições</div>
-                        </div>
-                    </div>
-                </div>
-                <p>Dashboard simplificado - funcionalidades completas em desenvolvimento.</p>
-            `;
-        }
-    }
-
-    populateLocationFilter() {
-        // Implementação existente
     }
 
     escapeHtml(text) {
@@ -2816,55 +1577,9 @@ class InventorySystem {
         div.textContent = text;
         return div.innerHTML;
     }
-
-    // Métodos existentes para confirmação de exclusão, etc.
-    confirmDeleteProduct(productId, productName) {
-        if (confirm(`Tem certeza que deseja excluir o produto "${productName}"?`)) {
-            this.deleteProduct(productId);
-        }
-    }
-
-    confirmDeleteRequisition(requisitionId) {
-        if (confirm('Tem certeza que deseja excluir esta requisição?')) {
-            this.deleteRequisition(requisitionId);
-        }
-    }
-
-    async deleteRequisition(requisitionId) {
-        try {
-            await deleteDoc(doc(db, "requisitions", requisitionId));
-            this.requisitions = this.requisitions.filter(r => r.id !== requisitionId);
-            this.renderRequisitions();
-            alert("Requisição excluída com sucesso!");
-        } catch (error) {
-            console.error("Erro ao excluir requisição:", error);
-            alert("Erro ao excluir requisição: " + error.message);
-        }
-    }
-
-    // Métodos para lotes (simplificados)
-    openEditLoteModal(index) {
-        // Implementação existente
-    }
-
-    removeLote(index) {
-        if (index >= 0 && index < this.currentLotes.length) {
-            this.currentLotes.splice(index, 1);
-            this.renderLotes();
-        }
-    }
-
-    // Métodos para seleção de produtos (existentes)
-    openProductSelectionModal() {
-        // Implementação existente
-    }
-
-    updateSelectedProductsDisplay() {
-        // Implementação existente  
-    }
 }
 
-// Inicializar o sistema
+// Inicializar o sistema quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
     window.inventorySystem = new InventorySystem();
 });
