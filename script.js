@@ -1401,6 +1401,19 @@ class InventorySystem {
 
     // ===================== MENU E RELATÓRIOS =====================
     setupEventListeners() {
+        // === CORREÇÃO CRÍTICA: LISTENER DO LOGIN ADICIONADO ===
+        // Login
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = e.target.loginEmail.value;
+                const password = e.target.loginPassword.value;
+                this.login(email, password);
+            });
+        }
+        // === FIM DA CORREÇÃO ===
+
         // Menu
         const menuToggle = document.getElementById('menuToggle');
         if (menuToggle) {
