@@ -118,7 +118,7 @@
 
     <!-- Modal para adicionar/editar produtos -->
     <div id="productModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content large-modal">
             <div class="modal-header">
                 <h3 id="modalTitle">Adicionar Produto</h3>
                 <button type="button" id="closeModal" class="close-btn">&times;</button>
@@ -134,24 +134,57 @@
                     <input type="text" id="productCode" name="productCode" required>
                 </div>
                 <div class="form-group">
-                    <label for="productQuantity">Quantidade em Estoque *</label>
-                    <input type="number" id="productQuantity" name="productQuantity" placeholder="Quantidade" step="0.01" required>
-                </div>
-                <div class="form-group">
                     <label for="productLocation">Setor (Setor/Prateleira) *</label>
                     <input type="text" id="productLocation" name="productLocation" required>
-                </div>
-                <div class="form-group">
-                    <label for="productExpiry">Data de Validade</label>
-                    <input type="date" id="productExpiry" name="productExpiry">
                 </div>
                 <div class="form-group">
                     <label for="productDescription">Descrição (Opcional)</label>
                     <textarea id="productDescription" name="productDescription" rows="3"></textarea>
                 </div>
+                
+                <!-- Seção de Lotes -->
+                <div class="lote-section">
+                    <div class="lote-header">
+                        <h4>Lotes do Produto</h4>
+                        <button type="button" id="addLoteBtn" class="btn-secondary">+ Adicionar Lote</button>
+                    </div>
+                    <div id="lotesList" class="lote-list">
+                        <div class="empty-lotes">Nenhum lote adicionado</div>
+                    </div>
+                </div>
+                
                 <div class="form-actions">
                     <button type="button" id="cancelBtn" class="btn-secondary">Cancelar</button>
                     <button type="submit" id="saveBtn" class="btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para adicionar/editar lote -->
+    <div id="loteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="loteModalTitle">Adicionar Lote</h3>
+                <button type="button" id="closeLoteModal" class="close-btn">&times;</button>
+            </div>
+            <form id="loteForm">
+                <input type="hidden" id="loteIndex" name="loteIndex">
+                <div class="form-group">
+                    <label for="loteNumber">Número do Lote *</label>
+                    <input type="text" id="loteNumber" name="loteNumber" required>
+                </div>
+                <div class="form-group">
+                    <label for="loteQuantity">Quantidade no Lote *</label>
+                    <input type="number" id="loteQuantity" name="loteQuantity" min="1" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="loteExpiry">Data de Validade do Lote *</label>
+                    <input type="date" id="loteExpiry" name="loteExpiry" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="cancelLoteBtn" class="btn-secondary">Cancelar</button>
+                    <button type="submit" id="saveLoteBtn" class="btn-primary">Salvar Lote</button>
                 </div>
             </form>
         </div>
