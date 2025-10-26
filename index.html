@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Dependências para geração de relatórios -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- Página de Login Dedicada -->
@@ -39,7 +43,26 @@
             <header>
                 <h1>Sistema de Controle de Estoque</h1>
                 <p>Gerenciamento de Almoxarifado</p>
-                <button type="button" id="logoutBtn" class="btn-secondary logout-btn">Sair</button>
+                
+                <!-- Menu Container com Dropdown -->
+                <div class="menu-container">
+                    <div class="menu-dropdown">
+                        <button class="menu-btn">
+                            <i>☰</i>
+                            <span>MENU</span>
+                        </button>
+                        <div class="dropdown-content">
+                            <div class="dropdown-item" onclick="window.inventorySystem.openReportModal()">
+                                <i>📊</i>
+                                <span>RELATÓRIO</span>
+                            </div>
+                            <div class="dropdown-item" onclick="window.inventorySystem.logout()">
+                                <i>🚪</i>
+                                <span>SAIR</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </header>
 
             <main>
@@ -289,6 +312,73 @@
                     <button type="submit" id="saveUserBtn" class="btn-primary">Salvar Usuário</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal para Gerar Relatório -->
+    <div id="reportModal" class="modal">
+        <div class="modal-overlay" onclick="window.inventorySystem.closeReportModal()"></div>
+        <div class="modal-content report-modal">
+            <div class="modal-header">
+                <h3>Gerar Relatório</h3>
+                <button class="close-btn" onclick="window.inventorySystem.closeReportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="report-options">
+                    <div class="report-option" onclick="window.inventorySystem.selectReportType('products')">
+                        <div class="report-icon">📦</div>
+                        <h4>Produtos em Estoque</h4>
+                        <p>Relatório completo de todos os produtos no sistema</p>
+                    </div>
+                    <div class="report-option" onclick="window.inventorySystem.selectReportType('requisitions')">
+                        <div class="report-icon">📋</div>
+                        <h4>Produtos Requisitados</h4>
+                        <p>Histórico de todas as requisições realizadas</p>
+                    </div>
+                </div>
+
+                <div class="period-selection">
+                    <h4>Período do Relatório</h4>
+                    <div class="period-grid">
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('today')">Hoje</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('week')">Esta Semana</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('month')">Este Mês</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('quarter')">Este Trimestre</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('year')">Este Ano</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('all')">Todo Período</div>
+                        <div class="period-option" onclick="window.inventorySystem.selectPeriod('custom')">Personalizado</div>
+                    </div>
+                    <div id="customPeriod" class="custom-period hidden">
+                        <div class="form-group">
+                            <label>Data Inicial</label>
+                            <input type="date" id="startDate">
+                        </div>
+                        <div class="form-group">
+                            <label>Data Final</label>
+                            <input type="date" id="endDate">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="format-selection">
+                    <h4>Formato do Relatório</h4>
+                    <div class="format-options">
+                        <div class="format-option" onclick="window.inventorySystem.selectFormat('pdf')">
+                            <div>📄 PDF</div>
+                            <small>Colorido e formatado</small>
+                        </div>
+                        <div class="format-option" onclick="window.inventorySystem.selectFormat('excel')">
+                            <div>📊 Excel</div>
+                            <small>Dados brutos</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn-secondary" onclick="window.inventorySystem.closeReportModal()">Cancelar</button>
+                    <button class="btn-primary" onclick="window.inventorySystem.generateReport()">Gerar Relatório</button>
+                </div>
+            </div>
         </div>
     </div>
 
