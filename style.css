@@ -103,6 +103,11 @@
     }
 }
 
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     line-height: 1.6;
@@ -158,6 +163,88 @@ header p {
     font-size: 1.2rem;
     opacity: 0.95;
     font-weight: 500;
+}
+
+/* Menu dropdown - Design glassmorphism */
+.menu-container {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.menu-btn {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: var(--text-white);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    transition: var(--transition);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.menu-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.menu-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: rgba(15, 52, 96, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-xl);
+    min-width: 200px;
+    z-index: 1000;
+    margin-top: var(--spacing-sm);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.dropdown-content.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: var(--transition);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item:hover {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--primary-color);
+}
+
+.dropdown-item i {
+    font-size: 1.1rem;
+    width: 20px;
+    text-align: center;
 }
 
 /* Botão de logout moderno */
@@ -1649,6 +1736,275 @@ form {
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
     background: var(--bg-tertiary);
     transform: translateY(-2px);
+}
+
+/* ===================== SISTEMA DE RELATÓRIOS ===================== */
+
+/* Modal de relatório - Design aprimorado */
+.report-modal .modal-content {
+    max-width: 700px;
+}
+
+.report-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xl);
+    margin-bottom: var(--spacing-2xl);
+}
+
+.report-option {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.report-option::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+    transition: var(--transition);
+}
+
+.report-option:hover::before {
+    left: 100%;
+}
+
+.report-option:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.report-option.selected {
+    border-color: var(--primary-color);
+    background: rgba(139, 92, 246, 0.1);
+    box-shadow: var(--shadow-glow);
+}
+
+.report-icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-md);
+    color: var(--primary-color);
+}
+
+.report-option h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+}
+
+.report-option p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.period-selection {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.period-selection h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.period-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+.period-option {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.period-option:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.period-option.selected {
+    border-color: var(--primary-color);
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--primary-color);
+}
+
+.custom-period {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border: 2px solid var(--border-color);
+}
+
+.custom-period.hidden {
+    display: none;
+}
+
+.format-selection {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.format-selection h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.format-options {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+.format-option {
+    flex: 1;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.format-option:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.format-option.selected {
+    border-color: var(--primary-color);
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--primary-color);
+}
+
+.format-option div:first-child {
+    font-size: 1.2rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.format-option small {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Loading state para geração de relatório */
+.report-loading {
+    text-align: center;
+    padding: var(--spacing-3xl);
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto var(--spacing-lg);
+}
+
+.report-loading h4 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.report-loading p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Responsividade para o menu e modal de relatório */
+@media (max-width: 768px) {
+    .menu-container {
+        position: static;
+        justify-content: flex-end;
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .dropdown-content {
+        right: 0;
+        left: auto;
+    }
+    
+    .report-options {
+        grid-template-columns: 1fr;
+    }
+    
+    .period-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .custom-period {
+        grid-template-columns: 1fr;
+    }
+    
+    .format-options {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .menu-btn {
+        padding: var(--spacing-sm);
+    }
+    
+    .menu-btn span {
+        display: none;
+    }
+    
+    .dropdown-content {
+        min-width: 150px;
+    }
+    
+    .report-modal .modal-content {
+        margin: var(--spacing-sm);
+        width: calc(100% - var(--spacing-sm) * 2);
+    }
+    
+    .report-option {
+        padding: var(--spacing-lg);
+    }
+    
+    .period-option {
+        padding: var(--spacing-md);
+        font-size: 0.9rem;
+    }
+    
+    .format-option {
+        padding: var(--spacing-md);
+    }
 }
 
 /* Responsividade para lotes */
