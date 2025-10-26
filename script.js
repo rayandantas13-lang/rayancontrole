@@ -1628,64 +1628,103 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
 
     // ===================== Requisition Management =====================
     async generateRequisition(event) {
-        event.preventDefault();
-        
-        if (this.selectedProductsForRequisition.length === 0) {
-            alert('Selecione pelo menos um produto para a requisição.');
+    event.preventDefault();
+    
+    if (this.selectedProductsForRequisition.length === 0) {
+        alert('Selecione pelo menos um produto para a requisição.');
+        return;
+    }
+
+    // Verificar se todos os produtos têm lotes selecionados
+    for (const product of this.selectedProductsForRequisition) {
+        if (!product.selectedLotes || product.selectedLotes.length === 0) {
+            alert(`Por favor, selecione os lotes para o produto: ${product.name}`);
             return;
         }
-
-        for (const product of this.selectedProductsForRequisition) {
-            if (!product.requestedQuantity || product.requestedQuantity <= 0) {
-                alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
-                return;
-            }
-            
-            if (product.requestedQuantity > product.availableQuantity) {
-                alert(`Quantidade requisitada (${this.formatNumber(product.requestedQuantity)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
-                return;
-            }
+        
+        const totalRequested = product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0);
+        if (totalRequested <= 0) {
+            alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
+            return;
         }
-
-        const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
-            sum + (product.requestedQuantity || 0), 0);
-
-        const requisition = {
-            id: Date.now().toString(),
-            products: this.selectedProductsForRequisition.map(product => ({
-                id: product.id,
-                name: product.name || '',
-                code: product.code || '',
-                setor: product.local || '',
-                requestedQuantity: product.requestedQuantity || 1,
-                availableQuantity: product.availableQuantity || 0,
-                expiry: product.expiry || null
-            })),
-            totalRequested: totalRequested,
-            status: 'Pendente',
-            createdAt: new Date().toISOString(),
-            createdBy: this.currentUser?.email || 'Sistema',
-            description: document.getElementById('requisitionDescription')?.value || '',
-            local: document.getElementById('requisitionLocal')?.value || ''
-        };
-
-        Object.keys(requisition).forEach(key => {
-            if (requisition[key] === undefined) {
-                delete requisition[key];
-            }
-        });
-
-        this.requisitions.push(requisition);
-        await this.saveRequisitionToFirestore(requisition);
-        this.renderRequisitions();
-        this.updateDashboard();
-
-        this.selectedProductsForRequisition = [];
-        this.updateSelectedProductsDisplay();
-        this.closeRequisitionModal();
-
-        alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
+        
+        if (totalRequested > product.availableQuantity) {
+            alert(`Quantidade requisitada (${this.formatNumber(totalRequested)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
+            return;
+        }
     }
+
+    const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
+        sum + product.selectedLotes.reduce((loteSum, lote) => loteSum + lote.quantity, 0), 0
+    );
+
+    const requisition = {
+        id: Date.now().toString(),
+        products: this.selectedProductsForRequisition.map(product => ({
+            id: product.id,
+            name: product.name || '',
+            code: product.code || '',
+            setor: product.local || '',
+            requestedQuantity: product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0),
+            availableQuantity: product.availableQuantity || 0,
+            selectedLotes: product.selectedLotes.map(lote => ({
+                loteNumber: lote.loteNumber,
+                quantity: lote.quantity,
+                expiry: lote.expiry
+            })),
+            expiry: product.expiry || null
+        })),
+        totalRequested: totalRequested,
+        status: 'Pendente',
+        createdAt: new Date().toISOString(),
+        createdBy: this.currentUser?.email || 'Sistema',
+        description: document.getElementById('requisitionDescription')?.value || '',
+        local: document.getElementById('requisitionLocal')?.value || ''
+    };
+
+    // ATUALIZAR ESTOQUE - DEDUZIR DOS LOTES SELECIONADOS
+    for (const reqProduct of requisition.products) {
+        const productIndex = this.products.findIndex(p => p.id === reqProduct.id);
+        if (productIndex !== -1) {
+            const product = this.products[productIndex];
+            
+            // Deduzir dos lotes específicos
+            reqProduct.selectedLotes.forEach(selectedLote => {
+                const loteIndex = product.lotes.findIndex(l => l.number === selectedLote.loteNumber);
+                if (loteIndex !== -1) {
+                    product.lotes[loteIndex].quantity -= selectedLote.quantity;
+                    if (product.lotes[loteIndex].quantity < 0) {
+                        product.lotes[loteIndex].quantity = 0;
+                    }
+                }
+            });
+            
+            // Recalcular quantidade total do produto
+            product.quantity = product.lotes.reduce((sum, lote) => sum + lote.quantity, 0);
+            
+            // Atualizar no Firestore
+            await this.saveToFirestore(product);
+        }
+    }
+
+    Object.keys(requisition).forEach(key => {
+        if (requisition[key] === undefined) {
+            delete requisition[key];
+        }
+    });
+
+    this.requisitions.push(requisition);
+    await this.saveRequisitionToFirestore(requisition);
+    this.renderRequisitions();
+    this.render(); // Atualizar lista de produtos
+    this.updateDashboard();
+
+    this.selectedProductsForRequisition = [];
+    this.updateSelectedProductsDisplay();
+    this.closeRequisitionModal();
+
+    alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
+}
 
     renderRequisitions() {
         const requisitionsList = document.getElementById("requisitionsList");
@@ -1925,89 +1964,73 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         if (modalOverlay) modalOverlay.classList.remove('active');
     }
 
-    populateAvailableProducts() {
-        const availableProductsList = document.getElementById('availableProductsList');
-        const locationFilter = document.getElementById('locationFilter');
+   populateAvailableProducts() {
+    const availableProductsList = document.getElementById('availableProductsList');
+    const locationFilter = document.getElementById('locationFilter');
+    
+    if (availableProductsList) {
+        this.updateLocationFilterInModal();
         
-        if (availableProductsList) {
-            this.updateLocationFilterInModal();
+        const selectedLocation = locationFilter ? locationFilter.value : '';
+        const filteredProducts = selectedLocation ? 
+            this.products.filter(product => product.local === selectedLocation) : 
+            this.products;
+        
+        availableProductsList.innerHTML = filteredProducts.map(product => {
+            const expiryStatus = this.getProductExpiryStatus(product.lotes);
+            const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
             
-            const selectedLocation = locationFilter ? locationFilter.value : '';
-            const filteredProducts = selectedLocation ? 
-                this.products.filter(product => product.local === selectedLocation) : 
-                this.products;
-            
-            availableProductsList.innerHTML = filteredProducts.map(product => {
-                const expiryStatus = this.getProductExpiryStatus(product.lotes);
-                const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
-                
-                return `
-                <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
-                    <div class="available-product-info">
-                        <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
-                        <div class="available-product-details">
-                            <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
-                            <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
-                            <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
-                            <div>Status Validade: 
-                                <span class="expiry-status ${expiryStatus.class}">
-                                    ${expiryStatus.label}
-                                </span>
-                            </div>
+            return `
+            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
+                <div class="available-product-info">
+                    <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
+                    <div class="available-product-details">
+                        <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
+                        <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
+                        <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
+                        <div>Lotes: ${product.lotes?.length || 0} disponíveis</div>
+                        <div>Status Validade: 
+                            <span class="expiry-status ${expiryStatus.class}">
+                                ${expiryStatus.label}
+                            </span>
                         </div>
-                    </div>
-                    <div class="product-selection-controls">
-                        <div class="quantity-input-section">
-                            <label>Quantidade:</label>
-                            <input type="number" 
-                                   class="request-quantity-input" 
-                                   data-product-id="${product.id}"
-                                   min="1" 
-                                   max="${product.quantity}"
-                                   value="${isSelected ? this.selectedProductsForRequisition.find(p => p.id === product.id)?.requestedQuantity || 1 : 1}"
-                                   ${isSelected ? '' : 'disabled'}>
-                            <small class="stock-info">Estoque: ${this.formatNumber(product.quantity)}</small>
-                        </div>
-                        <input type="checkbox" 
-                               class="product-checkbox" 
-                               value="${product.id}" 
-                               ${isSelected ? 'checked' : ''}>
                     </div>
                 </div>
-            `;
-            }).join('');
+                <div class="product-selection-controls">
+                    <button type="button" class="btn-secondary select-lotes-btn" 
+                            onclick="window.inventorySystem.openLoteSelectionModal(${JSON.stringify(product).replace(/"/g, '&quot;')})">
+                        Selecionar Lotes
+                    </button>
+                    <input type="checkbox" 
+                           class="product-checkbox" 
+                           value="${product.id}" 
+                           ${isSelected ? 'checked' : ''}>
+                </div>
+            </div>
+        `;
+        }).join('');
 
-            availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', (e) => {
-                    const productId = e.target.value;
-                    const productItem = e.target.closest('.available-product-item');
-                    const quantityInput = productItem.querySelector('.request-quantity-input');
-                    
-                    if (e.target.checked) {
-                        productItem.classList.add('selected');
-                        quantityInput.disabled = false;
-                        quantityInput.focus();
-                    } else {
-                        productItem.classList.remove('selected');
-                        quantityInput.disabled = true;
-                    }
-                });
+        // Remover o event listener antigo do checkbox e adicionar um novo
+        availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const productId = e.target.value;
+                const productItem = e.target.closest('.available-product-item');
+                
+                if (e.target.checked) {
+                    productItem.classList.add('selected');
+                    // Não adiciona automaticamente, espera a seleção de lotes
+                } else {
+                    productItem.classList.remove('selected');
+                    // Remover da lista de selecionados
+                    this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(
+                        p => p.id !== productId
+                    );
+                    this.updateSelectedProductsDisplay();
+                }
             });
-
-            availableProductsList.querySelectorAll('.request-quantity-input').forEach(input => {
-                input.addEventListener('change', (e) => {
-                    const productId = e.target.dataset.productId;
-                    const quantity = parseInt(e.target.value);
-                    const maxQuantity = parseInt(e.target.max);
-                    
-                    if (quantity > maxQuantity) {
-                        alert(`Quantidade não pode exceder o estoque disponível: ${this.formatNumber(maxQuantity)}`);
-                        e.target.value = maxQuantity;
-                    }
-                });
-            });
-        }
+        });
     }
+}
 
     updateLocationFilterInModal() {
         const locationFilter = document.getElementById('locationFilter');
@@ -2534,6 +2557,262 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         div.textContent = text;
         return div.innerHTML;
     }
+
+  //----------------------------------------------
+
+  // ===================== SISTEMA DE SELEÇÃO DE LOTES =====================
+
+// Variáveis para controle da seleção de lotes
+currentProductForLoteSelection = null;
+selectedLotesForRequisition = [];
+
+// Método para abrir a seleção de lotes
+openLoteSelectionModal(product) {
+    this.currentProductForLoteSelection = product;
+    this.selectedLotesForRequisition = [];
+    
+    // Preencher informações do produto
+    document.getElementById('selectedProductName').textContent = product.name;
+    document.getElementById('selectedProductCode').textContent = `Código: ${product.code}`;
+    document.getElementById('totalAvailableQuantity').textContent = this.formatNumber(product.quantity);
+    
+    this.populateAvailableLotes(product);
+    this.updateLoteSelectionSummary();
+    
+    // Abrir modal
+    const modal = document.getElementById('loteSelectionModal');
+    const modalOverlay = document.getElementById('modalOverlay');
+    if (modal && modalOverlay) {
+        modal.classList.add('active');
+        modalOverlay.classList.add('active');
+    }
+}
+
+// Popular lotes disponíveis
+populateAvailableLotes(product) {
+    const availableLotesList = document.getElementById('availableLotesList');
+    if (!availableLotesList) return;
+    
+    if (!product.lotes || product.lotes.length === 0) {
+        availableLotesList.innerHTML = `
+            <div class="empty-lotes">
+                <p>Nenhum lote disponível para este produto.</p>
+                <p>Quantidade total: ${this.formatNumber(product.quantity)}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Filtrar apenas lotes com quantidade disponível
+    const availableLotes = product.lotes.filter(lote => lote.quantity > 0);
+    
+    if (availableLotes.length === 0) {
+        availableLotesList.innerHTML = `
+            <div class="empty-lotes">
+                <p>Todos os lotes estão com quantidade zero.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    availableLotesList.innerHTML = availableLotes.map((lote, index) => {
+        const expiryStatus = this.getExpiryStatus(lote.expiry);
+        const isSelected = this.selectedLotesForRequisition.some(selected => 
+            selected.loteIndex === index
+        );
+        const selectedQuantity = isSelected ? 
+            this.selectedLotesForRequisition.find(selected => selected.loteIndex === index).quantity : 0;
+        
+        return `
+            <div class="lote-selection-item ${isSelected ? 'selected' : ''}" data-lote-index="${index}">
+                <div class="lote-selection-info">
+                    <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
+                    <div class="lote-details">
+                        <span class="lote-quantity">Disponível: ${this.formatNumber(lote.quantity)}</span>
+                        <span class="expiry-date">Validade: ${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
+                        <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
+                    </div>
+                </div>
+                <div class="lote-selection-controls">
+                    <div class="quantity-selection">
+                        <label>Quantidade a usar:</label>
+                        <input type="number" 
+                               class="lote-quantity-input" 
+                               data-lote-index="${index}"
+                               min="0" 
+                               max="${lote.quantity}"
+                               value="${selectedQuantity}"
+                               ${!isSelected ? 'disabled' : ''}>
+                        <small>Máx: ${this.formatNumber(lote.quantity)}</small>
+                    </div>
+                    <div class="lote-checkbox">
+                        <input type="checkbox" 
+                               class="lote-selection-checkbox" 
+                               data-lote-index="${index}"
+                               ${isSelected ? 'checked' : ''}>
+                        <label>Selecionar</label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Adicionar event listeners
+    this.setupLoteSelectionEvents();
+}
+
+// Configurar eventos da seleção de lotes
+setupLoteSelectionEvents() {
+    // Checkboxes de seleção
+    document.querySelectorAll('.lote-selection-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const loteIndex = parseInt(e.target.dataset.loteIndex);
+            const loteItem = e.target.closest('.lote-selection-item');
+            const quantityInput = loteItem.querySelector('.lote-quantity-input');
+            
+            if (e.target.checked) {
+                loteItem.classList.add('selected');
+                quantityInput.disabled = false;
+                quantityInput.value = 1;
+                quantityInput.focus();
+                
+                // Adicionar ao array de seleção
+                const product = this.currentProductForLoteSelection;
+                const lote = product.lotes[loteIndex];
+                this.selectedLotesForRequisition.push({
+                    loteIndex: loteIndex,
+                    loteNumber: lote.number,
+                    quantity: 1,
+                    maxQuantity: lote.quantity,
+                    expiry: lote.expiry
+                });
+            } else {
+                loteItem.classList.remove('selected');
+                quantityInput.disabled = true;
+                quantityInput.value = 0;
+                
+                // Remover do array de seleção
+                this.selectedLotesForRequisition = this.selectedLotesForRequisition.filter(
+                    selected => selected.loteIndex !== loteIndex
+                );
+            }
+            
+            this.updateLoteSelectionSummary();
+        });
+    });
+    
+    // Inputs de quantidade
+    document.querySelectorAll('.lote-quantity-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const loteIndex = parseInt(e.target.dataset.loteIndex);
+            const quantity = parseInt(e.target.value) || 0;
+            const maxQuantity = parseInt(e.target.max);
+            
+            if (quantity > maxQuantity) {
+                alert(`Quantidade não pode exceder o disponível no lote: ${this.formatNumber(maxQuantity)}`);
+                e.target.value = maxQuantity;
+                this.updateLoteSelection(loteIndex, maxQuantity);
+            } else if (quantity < 0) {
+                e.target.value = 0;
+                this.updateLoteSelection(loteIndex, 0);
+            } else {
+                this.updateLoteSelection(loteIndex, quantity);
+            }
+            
+            this.updateLoteSelectionSummary();
+        });
+    });
+}
+
+// Atualizar quantidade selecionada de um lote
+updateLoteSelection(loteIndex, quantity) {
+    const selectedLote = this.selectedLotesForRequisition.find(
+        selected => selected.loteIndex === loteIndex
+    );
+    
+    if (selectedLote) {
+        selectedLote.quantity = quantity;
+    }
+}
+
+// Atualizar resumo da seleção
+updateLoteSelectionSummary() {
+    const summaryDiv = document.getElementById('selectedLotesSummary');
+    const totalSpan = document.getElementById('totalSelectedQuantity');
+    
+    if (!summaryDiv || !totalSpan) return;
+    
+    const totalSelected = this.selectedLotesForRequisition.reduce(
+        (sum, selected) => sum + selected.quantity, 0
+    );
+    
+    totalSpan.textContent = this.formatNumber(totalSelected);
+    
+    if (this.selectedLotesForRequisition.length === 0) {
+        summaryDiv.innerHTML = 'Nenhum lote selecionado';
+    } else {
+        summaryDiv.innerHTML = this.selectedLotesForRequisition.map(selected => {
+            const lote = this.currentProductForLoteSelection.lotes[selected.loteIndex];
+            return `
+                <div class="selected-lote-item">
+                    <span class="lote-number">${selected.loteNumber}</span>
+                    <span class="lote-quantity">${this.formatNumber(selected.quantity)}</span>
+                    <span class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+// Confirmar seleção de lotes
+confirmLoteSelection() {
+    const totalSelected = this.selectedLotesForRequisition.reduce(
+        (sum, selected) => sum + selected.quantity, 0
+    );
+    
+    if (totalSelected === 0) {
+        alert('Selecione pelo menos um lote e informe a quantidade.');
+        return;
+    }
+    
+    // Adicionar produto aos selecionados para requisição
+    const existingIndex = this.selectedProductsForRequisition.findIndex(
+        p => p.id === this.currentProductForLoteSelection.id
+    );
+    
+    const productData = {
+        id: this.currentProductForLoteSelection.id,
+        name: this.currentProductForLoteSelection.name,
+        code: this.currentProductForLoteSelection.code,
+        local: this.currentProductForLoteSelection.local,
+        availableQuantity: this.currentProductForLoteSelection.quantity,
+        requestedQuantity: totalSelected,
+        selectedLotes: [...this.selectedLotesForRequisition],
+        expiry: this.currentProductForLoteSelection.lotes?.[0]?.expiry
+    };
+    
+    if (existingIndex !== -1) {
+        this.selectedProductsForRequisition[existingIndex] = productData;
+    } else {
+        this.selectedProductsForRequisition.push(productData);
+    }
+    
+    this.closeLoteSelectionModal();
+    this.updateSelectedProductsDisplay();
+}
+
+// Fechar modal de seleção de lotes
+closeLoteSelectionModal() {
+    const modal = document.getElementById('loteSelectionModal');
+    const modalOverlay = document.getElementById('modalOverlay');
+    
+    if (modal) modal.classList.remove('active');
+    if (modalOverlay) modalOverlay.classList.remove('active');
+    
+    this.currentProductForLoteSelection = null;
+    this.selectedLotesForRequisition = [];
+}
+  
 }
 
 // Inicializar o sistema quando a página carregar
