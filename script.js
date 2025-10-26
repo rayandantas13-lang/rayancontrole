@@ -545,27 +545,27 @@ async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
         }
         
         // ========== CABEÇALHO DA REQUISIÇÃO ==========
-        doc.setFillColor(139, 92, 246); // Cor roxa do tema
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        
-        // Número da requisição - CORRIGIDO
-        const requisitionId = requisition.id || 'N/A';
-        doc.text(`Requisição #${requisitionId}`, margin + 10, yPosition + 10);
-        
-        // Status
-        const status = requisition.status || 'Pendente';
-        doc.text(`Status: ${status}`, margin + 120, yPosition + 10);
-        
-        // Data - CORRIGIDO (usando formatação segura)
-        const createdAt = requisition.createdAt ? 
-            new Date(requisition.createdAt).toLocaleDateString('pt-BR') : 
-            'Data não disponível';
-        doc.text(`Data: ${createdAt}`, pageWidth - margin - 120, yPosition + 10);
-        
-        yPosition += 30;
+doc.setFillColor(139, 92, 246); // Cor roxa do tema
+doc.rect(margin, yPosition, pageWidth - 2 * margin, 35, 'F'); // Aumentei a altura para 35
+doc.setTextColor(255, 255, 255);
+doc.setFontSize(12);
+doc.setFont('helvetica', 'bold');
+
+// Número da requisição - CORRIGIDO
+const requisitionId = requisition.id || 'N/A';
+doc.text(`Requisição #${requisitionId}`, margin + 10, yPosition + 10);
+
+// Status
+const status = requisition.status || 'Pendente';
+doc.text(`Status: ${status}`, margin + 120, yPosition + 10);
+
+// Data - EM LINHA SEPARADA
+const createdAt = requisition.createdAt ? 
+    new Date(requisition.createdAt).toLocaleDateString('pt-BR') : 
+    'Data não disponível';
+doc.text(`Data: ${createdAt}`, margin + 10, yPosition + 25); // Mudei para linha abaixo
+
+yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         
         // ========== INFORMAÇÕES ADICIONAIS ==========
         doc.setTextColor(0, 0, 0);
