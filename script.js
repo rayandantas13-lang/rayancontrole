@@ -30,6 +30,12 @@ class InventorySystem {
         this.userRole = 'guest';
         this.currentLotes = []; // Array para armazenar lotes temporários
         this.editingLoteIndex = -1; // Índice do lote sendo editado
+        
+        // Variáveis para controle do relatório
+        this.currentReportType = null;
+        this.currentPeriod = null;
+        this.currentFormat = null;
+        
         this.init();
     }
 
@@ -37,6 +43,555 @@ class InventorySystem {
         this.setupEventListeners();
         await this.setupAuthListener();
     }
+
+    // ===================== SISTEMA DE RELATÓRIOS =====================
+    
+    // Menu dropdown functionality
+    setupMenuDropdown() {
+        const menuBtn = document.querySelector('.menu-btn');
+        const dropdownContent = document.querySelector('.dropdown-content');
+        
+        if (menuBtn && dropdownContent) {
+            menuBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdownContent.classList.toggle('show');
+            });
+            
+            // Fechar dropdown ao clicar fora
+            document.addEventListener('click', function() {
+                dropdownContent.classList.remove('show');
+            });
+        }
+    }
+
+    // Modal de relatório
+    openReportModal() {
+        const modal = document.getElementById('reportModal');
+        if (modal) {
+            modal.classList.add('active');
+            document.querySelector('.modal-overlay').classList.add('active');
+            
+            // Reset selections
+            this.resetReportSelections();
+        }
+    }
+
+    closeReportModal() {
+        const modal = document.getElementById('reportModal');
+        if (modal) {
+            modal.classList.remove('active');
+            document.querySelector('.modal-overlay').classList.remove('active');
+        }
+    }
+
+    resetReportSelections() {
+        this.currentReportType = null;
+        this.currentPeriod = null;
+        this.currentFormat = null;
+        
+        // Reset visual selections
+        document.querySelectorAll('.report-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        document.querySelectorAll('.period-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        document.querySelectorAll('.format-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        const customPeriod = document.getElementById('customPeriod');
+        if (customPeriod) customPeriod.classList.add('hidden');
+    }
+
+    selectReportType(type) {
+        this.currentReportType = type;
+        
+        document.querySelectorAll('.report-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        event.currentTarget.classList.add('selected');
+    }
+
+    selectPeriod(period) {
+        this.currentPeriod = period;
+        
+        document.querySelectorAll('.period-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        event.currentTarget.classList.add('selected');
+        
+        // Mostrar/ocultar período personalizado
+        const customPeriod = document.getElementById('customPeriod');
+        if (customPeriod) {
+            if (period === 'custom') {
+                customPeriod.classList.remove('hidden');
+            } else {
+                customPeriod.classList.add('hidden');
+            }
+        }
+    }
+
+    selectFormat(format) {
+        this.currentFormat = format;
+        
+        document.querySelectorAll('.format-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        event.currentTarget.classList.add('selected');
+    }
+
+    async generateReport() {
+        // Validar seleções
+        if (!this.currentReportType || !this.currentPeriod || !this.currentFormat) {
+            alert('Por favor, selecione todas as opções do relatório.');
+            return;
+        }
+        
+        // Validar período personalizado
+        if (this.currentPeriod === 'custom') {
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            
+            if (!startDate || !endDate || !startDate.value || !endDate.value) {
+                alert('Por favor, selecione ambas as datas para o período personalizado.');
+                return;
+            }
+            
+            if (new Date(startDate.value) > new Date(endDate.value)) {
+                alert('A data inicial não pode ser maior que a data final.');
+                return;
+            }
+        }
+        
+        // Mostrar loading
+        const modalBody = document.querySelector('.report-modal .modal-body');
+        const originalContent = modalBody.innerHTML;
+        
+        modalBody.innerHTML = `
+            <div class="report-loading">
+                <div class="loading-spinner"></div>
+                <h4>Gerando Relatório...</h4>
+                <p>Por favor, aguarde enquanto preparamos seu relatório.</p>
+            </div>
+        `;
+        
+        try {
+            // Coletar dados para o relatório
+            const reportData = await this.prepareReportData();
+            
+            if (this.currentFormat === 'pdf') {
+                await this.generatePDFReport(reportData);
+            } else {
+                await this.generateExcelReport(reportData);
+            }
+            
+            // Restaurar conteúdo original
+            modalBody.innerHTML = originalContent;
+            this.closeReportModal();
+            
+            // Feedback para o usuário
+            alert(`Relatório gerado com sucesso em formato ${this.currentFormat.toUpperCase()}!`);
+            
+        } catch (error) {
+            console.error('Erro ao gerar relatório:', error);
+            alert('Erro ao gerar relatório. Por favor, tente novamente.');
+            
+            // Restaurar conteúdo original em caso de erro
+            modalBody.innerHTML = originalContent;
+        }
+    }
+
+    async prepareReportData() {
+        const reportData = {
+            type: this.currentReportType,
+            period: this.currentPeriod,
+            generatedAt: new Date().toLocaleString('pt-BR'),
+            generatedBy: this.currentUser?.email || 'Sistema',
+            data: []
+        };
+        
+        // Adicionar dados de período personalizado se aplicável
+        if (this.currentPeriod === 'custom') {
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            if (startDate && endDate) {
+                reportData.startDate = startDate.value;
+                reportData.endDate = endDate.value;
+            }
+        }
+        
+        if (this.currentReportType === 'products') {
+            // Filtrar produtos por período se necessário
+            let filteredProducts = this.products;
+            
+            if (this.currentPeriod !== 'all') {
+                filteredProducts = this.filterProductsByPeriod(filteredProducts);
+            }
+            
+            reportData.data = filteredProducts.map(product => ({
+                id: product.id,
+                name: product.name,
+                code: product.code,
+                quantity: product.quantity,
+                local: product.local,
+                description: product.description,
+                lastUpdated: product.lastUpdated,
+                lotes: product.lotes || [],
+                expiryStatus: this.getProductExpiryStatus(product.lotes)
+            }));
+            
+        } else if (this.currentReportType === 'requisitions') {
+            // Filtrar requisições por período se necessário
+            let filteredRequisitions = this.requisitions;
+            
+            if (this.currentPeriod !== 'all') {
+                filteredRequisitions = this.filterRequisitionsByPeriod(filteredRequisitions);
+            }
+            
+            reportData.data = filteredRequisitions.map(requisition => ({
+                id: requisition.id,
+                status: requisition.status,
+                totalRequested: requisition.totalRequested,
+                finalizedQuantity: requisition.finalizedQuantity,
+                createdAt: requisition.createdAt,
+                createdBy: requisition.createdBy,
+                description: requisition.description,
+                local: requisition.local,
+                products: requisition.products || []
+            }));
+        }
+        
+        return reportData;
+    }
+
+    filterProductsByPeriod(products) {
+        const periodFilter = this.getPeriodDateRange();
+        if (!periodFilter) return products;
+        
+        const { startDate, endDate } = periodFilter;
+        
+        return products.filter(product => {
+            if (!product.lastUpdated) return false;
+            
+            const productDate = new Date(this.convertToISODate(product.lastUpdated));
+            return productDate >= startDate && productDate <= endDate;
+        });
+    }
+
+    filterRequisitionsByPeriod(requisitions) {
+        const periodFilter = this.getPeriodDateRange();
+        if (!periodFilter) return requisitions;
+        
+        const { startDate, endDate } = periodFilter;
+        
+        return requisitions.filter(requisition => {
+            if (!requisition.createdAt) return false;
+            
+            const requisitionDate = new Date(requisition.createdAt);
+            return requisitionDate >= startDate && requisitionDate <= endDate;
+        });
+    }
+
+    getPeriodDateRange() {
+        const today = new Date();
+        let startDate, endDate;
+        
+        switch (this.currentPeriod) {
+            case 'today':
+                startDate = new Date(today);
+                endDate = new Date(today);
+                break;
+            case 'week':
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() - today.getDay());
+                endDate = new Date(today);
+                endDate.setDate(today.getDate() + (6 - today.getDay()));
+                break;
+            case 'month':
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                break;
+            case 'quarter':
+                const quarter = Math.floor(today.getMonth() / 3);
+                startDate = new Date(today.getFullYear(), quarter * 3, 1);
+                endDate = new Date(today.getFullYear(), (quarter + 1) * 3, 0);
+                break;
+            case 'year':
+                startDate = new Date(today.getFullYear(), 0, 1);
+                endDate = new Date(today.getFullYear(), 11, 31);
+                break;
+            case 'custom':
+                const startInput = document.getElementById('startDate');
+                const endInput = document.getElementById('endDate');
+                if (startInput && endInput && startInput.value && endInput.value) {
+                    startDate = new Date(startInput.value);
+                    endDate = new Date(endInput.value);
+                } else {
+                    return null;
+                }
+                break;
+            default:
+                return null;
+        }
+        
+        // Ajustar para incluir todo o dia final
+        endDate.setHours(23, 59, 59, 999);
+        
+        return { startDate, endDate };
+    }
+
+    convertToISODate(dateString) {
+        // Converter de DD/MM/YYYY para YYYY-MM-DD
+        const parts = dateString.split('/');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return dateString;
+    }
+
+    async generatePDFReport(data) {
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Configurações do documento
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 20;
+            let yPosition = margin;
+            
+            // Cabeçalho
+            doc.setFillColor(139, 92, 246); // Cor primária
+            doc.rect(0, 0, pageWidth, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            doc.text('RELATÓRIO DE ESTOQUE', pageWidth / 2, 20, { align: 'center' });
+            
+            // Informações do relatório
+            yPosition = 60;
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            
+            const reportType = data.type === 'products' ? 'Produtos em Estoque' : 'Produtos Requisitados';
+            doc.text(`Tipo: ${reportType}`, margin, yPosition);
+            yPosition += 10;
+            doc.text(`Período: ${this.getPeriodLabel(data.period)}`, margin, yPosition);
+            yPosition += 10;
+            doc.text(`Gerado em: ${data.generatedAt}`, margin, yPosition);
+            yPosition += 10;
+            doc.text(`Gerado por: ${data.generatedBy}`, margin, yPosition);
+            yPosition += 20;
+            
+            if (data.type === 'products') {
+                await this.generateProductsPDF(doc, data, margin, pageWidth, yPosition);
+            } else {
+                await this.generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition);
+            }
+            
+            // Salvar o PDF
+            const fileName = `relatorio_${data.type}_${new Date().getTime()}.pdf`;
+            doc.save(fileName);
+            
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            throw new Error('Falha ao gerar PDF');
+        }
+    }
+
+    async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PRODUTOS EM ESTOQUE', margin, yPosition);
+        yPosition += 20;
+        
+        if (data.data.length === 0) {
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
+            return;
+        }
+        
+        // Cabeçalho da tabela
+        doc.setFillColor(200, 200, 200);
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        
+        const colWidth = (pageWidth - 2 * margin) / 5;
+        doc.text('Código', margin + 5, yPosition + 7);
+        doc.text('Nome', margin + colWidth + 5, yPosition + 7);
+        doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 7);
+        doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 7);
+        doc.text('Status', margin + 4 * colWidth + 5, yPosition + 7);
+        
+        yPosition += 15;
+        
+        // Dados dos produtos
+        doc.setFont('helvetica', 'normal');
+        data.data.forEach((product, index) => {
+            // Verificar se precisa de nova página
+            if (yPosition > 270) {
+                doc.addPage();
+                yPosition = margin;
+            }
+            
+            doc.text(product.code || '-', margin + 5, yPosition + 7);
+            doc.text(product.name || '-', margin + colWidth + 5, yPosition + 7);
+            doc.text(product.local || '-', margin + 2 * colWidth + 5, yPosition + 7);
+            doc.text(this.formatNumber(product.quantity || 0), margin + 3 * colWidth + 5, yPosition + 7);
+            doc.text(product.expiryStatus?.label || '-', margin + 4 * colWidth + 5, yPosition + 7);
+            
+            yPosition += 10;
+        });
+        
+        // Resumo
+        yPosition += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total de Produtos: ${this.formatNumber(data.data.length)}`, margin, yPosition);
+        yPosition += 10;
+        
+        const totalQuantity = data.data.reduce((sum, product) => sum + (product.quantity || 0), 0);
+        doc.text(`Quantidade Total em Estoque: ${this.formatNumber(totalQuantity)}`, margin, yPosition);
+    }
+
+    async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PRODUTOS REQUISITADOS', margin, yPosition);
+        yPosition += 20;
+        
+        if (data.data.length === 0) {
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Nenhuma requisição encontrada para o período selecionado.', margin, yPosition);
+            return;
+        }
+        
+        data.data.forEach((requisition, reqIndex) => {
+            // Verificar se precisa de nova página
+            if (yPosition > 200) {
+                doc.addPage();
+                yPosition = margin;
+            }
+            
+            // Cabeçalho da requisição
+            doc.setFillColor(240, 240, 240);
+            doc.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F');
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            
+            doc.text(`Requisição #${requisition.id}`, margin + 5, yPosition + 7);
+            doc.text(`Status: ${requisition.status}`, margin + 80, yPosition + 7);
+            doc.text(`Data: ${this.formatDateTime(requisition.createdAt)}`, pageWidth - margin - 100, yPosition + 7);
+            
+            yPosition += 20;
+            
+            // Produtos da requisição
+            doc.setFont('helvetica', 'normal');
+            requisition.products.forEach((product, prodIndex) => {
+                if (yPosition > 270) {
+                    doc.addPage();
+                    yPosition = margin;
+                }
+                
+                doc.text(`• ${product.name} (Cód: ${product.code})`, margin + 10, yPosition + 7);
+                doc.text(`Requisitado: ${this.formatNumber(product.requestedQuantity)}`, margin + 120, yPosition + 7);
+                doc.text(`Disponível: ${this.formatNumber(product.availableQuantity)}`, pageWidth - margin - 80, yPosition + 7);
+                
+                yPosition += 10;
+            });
+            
+            yPosition += 10;
+        });
+        
+        // Resumo
+        yPosition += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
+        yPosition += 10;
+        
+        const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
+        doc.text(`Total de Itens Requisitados: ${this.formatNumber(totalRequested)}`, margin, yPosition);
+    }
+
+    getPeriodLabel(period) {
+        const labels = {
+            'today': 'Hoje',
+            'week': 'Esta Semana',
+            'month': 'Este Mês',
+            'quarter': 'Este Trimestre',
+            'year': 'Este Ano',
+            'all': 'Todo Período',
+            'custom': 'Personalizado'
+        };
+        return labels[period] || period;
+    }
+
+    async generateExcelReport(data) {
+        try {
+            // Criar workbook
+            const wb = XLSX.utils.book_new();
+            
+            if (data.type === 'products') {
+                // Preparar dados para produtos
+                const excelData = data.data.map(product => ({
+                    'Código': product.code,
+                    'Nome': product.name,
+                    'Setor': product.local,
+                    'Quantidade': product.quantity,
+                    'Descrição': product.description,
+                    'Última Atualização': product.lastUpdated,
+                    'Status Validade': product.expiryStatus?.label,
+                    'Número de Lotes': product.lotes?.length || 0
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                XLSX.utils.book_append_sheet(wb, ws, "Produtos em Estoque");
+                
+            } else {
+                // Preparar dados para requisições
+                const excelData = data.data.map(requisition => ({
+                    'ID Requisição': requisition.id,
+                    'Status': requisition.status,
+                    'Total Requisitado': requisition.totalRequested,
+                    'Quantidade Finalizada': requisition.finalizedQuantity || 0,
+                    'Data': this.formatDateTime(requisition.createdAt),
+                    'Solicitante': requisition.createdBy,
+                    'Descrição': requisition.description,
+                    'Setor': requisition.local,
+                    'Número de Produtos': requisition.products?.length || 0
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                XLSX.utils.book_append_sheet(wb, ws, "Requisições");
+            }
+            
+            // Salvar o arquivo
+            const fileName = `relatorio_${data.type}_${new Date().getTime()}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+        } catch (error) {
+            console.error('Erro ao gerar Excel:', error);
+            throw new Error('Falha ao gerar Excel');
+        }
+    }
+
+    logout() {
+        if (confirm('Tem certeza que deseja sair do sistema?')) {
+            this.logout();
+        }
+    }
+
+    // ===================== FIM DO SISTEMA DE RELATÓRIOS =====================
 
     // ===================== Utilitários de Formatação =====================
     formatNumber(number, decimalPlaces = 0) {
@@ -1423,6 +1978,9 @@ class InventorySystem {
             });
         });
 
+        // Menu dropdown
+        this.setupMenuDropdown();
+
         // Modais - Botões principais
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) addItemBtn.addEventListener('click', () => this.openAddProductModal());
@@ -1572,6 +2130,15 @@ class InventorySystem {
                 this.closeAllModals();
             });
         }
+
+        // Event listeners para o sistema de relatórios
+        const reportModal = document.getElementById('reportModal');
+        if (reportModal) {
+            // Prevenir fechamento do modal ao clicar dentro do conteúdo
+            reportModal.querySelector('.modal-content').addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        }
     }
 
     filterAvailableProducts(searchTerm) {
@@ -1603,6 +2170,7 @@ class InventorySystem {
         this.closeUserModal();
         this.closeConfirmModal();
         this.closeLoteModal();
+        this.closeReportModal();
     }
 
     openAddProductModal() {
