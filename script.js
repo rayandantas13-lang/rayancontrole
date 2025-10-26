@@ -208,95 +208,92 @@ class InventorySystem {
     }
 
     async prepareReportData() {
-        const reportData = {
-            type: this.currentReportType,
-            period: this.currentPeriod,
-            generatedAt: new Date().toLocaleString('pt-BR'),
-            generatedBy: this.currentUser?.email || 'Sistema',
-            data: []
-        };
+    const reportData = {
+        type: this.currentReportType,
+        period: this.currentPeriod,
+        generatedAt: new Date().toLocaleString('pt-BR'),
+        generatedBy: this.currentUser?.email || 'Sistema',
+        data: []
+    };
+    
+    // Adicionar dados de período personalizado se aplicável
+    if (this.currentPeriod === 'custom') {
+        const startDate = document.getElementById('startDate');
+        const endDate = document.getElementById('endDate');
+        if (startDate && endDate) {
+            reportData.startDate = startDate.value;
+            reportData.endDate = endDate.value;
+        }
+    }
+    
+    if (this.currentReportType === 'products') {
+        // Filtrar produtos por período se necessário
+        let filteredProducts = this.products;
         
-        // Adicionar dados de período personalizado se aplicável
-        if (this.currentPeriod === 'custom') {
-            const startDate = document.getElementById('startDate');
-            const endDate = document.getElementById('endDate');
-            if (startDate && endDate) {
-                reportData.startDate = startDate.value;
-                reportData.endDate = endDate.value;
-            }
+        if (this.currentPeriod !== 'all') {
+            filteredProducts = this.filterProductsByPeriod(filteredProducts);
         }
         
-        if (this.currentReportType === 'products') {
-            // Filtrar produtos por período se necessário
-            let filteredProducts = this.products;
-            
-            if (this.currentPeriod !== 'all') {
-                filteredProducts = this.filterProductsByPeriod(filteredProducts);
-            }
-            
-            reportData.data = filteredProducts.map(product => ({
-                id: product.id,
-                name: product.name,
-                code: product.code,
-                quantity: product.quantity,
-                local: product.local,
-                description: product.description,
-                lastUpdated: product.lastUpdated,
-                lotes: product.lotes || [],
-                expiryStatus: this.getProductExpiryStatus(product.lotes)
-            }));
-            
-        } else if (this.currentReportType === 'requisitions') {
-            // Filtrar requisições por período se necessário
-            let filteredRequisitions = this.requisitions;
-            
-            if (this.currentPeriod !== 'all') {
-                filteredRequisitions = this.filterRequisitionsByPeriod(filteredRequisitions);
-            }
-            
-            reportData.data = filteredRequisitions.map(requisition => ({
-                id: requisition.id,
-                status: requisition.status,
-                totalRequested: requisition.totalRequested,
-                finalizedQuantity: requisition.finalizedQuantity,
-                createdAt: requisition.createdAt,
-                createdBy: requisition.createdBy,
-                description: requisition.description,
-                local: requisition.local,
-                products: requisition.products || []
-            }));
+        // ORGANIZAR POR SETOR
+        const productsBySector = this.groupProductsBySector(filteredProducts);
+        reportData.data = productsBySector;
+        
+    } else if (this.currentReportType === 'requisitions') {
+        // Filtrar requisições por período se necessário
+        let filteredRequisitions = this.requisitions;
+        
+        if (this.currentPeriod !== 'all') {
+            filteredRequisitions = this.filterRequisitionsByPeriod(filteredRequisitions);
         }
         
-        return reportData;
+        reportData.data = filteredRequisitions.map(requisition => ({
+            id: requisition.id,
+            status: requisition.status,
+            totalRequested: requisition.totalRequested,
+            finalizedQuantity: requisition.finalizedQuantity,
+            createdAt: requisition.createdAt,
+            createdBy: requisition.createdBy,
+            description: requisition.description,
+            local: requisition.local,
+            products: requisition.products || []
+        }));
     }
+    
+    return reportData;
+}
 
-    filterProductsByPeriod(products) {
-        const periodFilter = this.getPeriodDateRange();
-        if (!periodFilter) return products;
+// ADICIONE ESTE MÉTODO PARA AGRUPAR POR SETOR
+groupProductsBySector(products) {
+    const sectors = {};
+    
+    products.forEach(product => {
+        const sector = product.local || 'Sem Setor';
         
-        const { startDate, endDate } = periodFilter;
+        if (!sectors[sector]) {
+            sectors[sector] = {
+                sectorName: sector,
+                products: []
+            };
+        }
         
-        return products.filter(product => {
-            if (!product.lastUpdated) return false;
-            
-            const productDate = new Date(this.convertToISODate(product.lastUpdated));
-            return productDate >= startDate && productDate <= endDate;
+        sectors[sector].products.push({
+            id: product.id,
+            name: product.name,
+            code: product.code,
+            quantity: product.quantity,
+            local: product.local,
+            description: product.description,
+            lastUpdated: product.lastUpdated,
+            lotes: product.lotes || [],
+            expiryStatus: this.getProductExpiryStatus(product.lotes)
         });
-    }
-
-    filterRequisitionsByPeriod(requisitions) {
-        const periodFilter = this.getPeriodDateRange();
-        if (!periodFilter) return requisitions;
-        
-        const { startDate, endDate } = periodFilter;
-        
-        return requisitions.filter(requisition => {
-            if (!requisition.createdAt) return false;
-            
-            const requisitionDate = new Date(requisition.createdAt);
-            return requisitionDate >= startDate && requisitionDate <= endDate;
-        });
-    }
+    });
+    
+    // Ordenar setores alfabeticamente
+    return Object.values(sectors).sort((a, b) => 
+        a.sectorName.localeCompare(b.sectorName)
+    );
+}
 
     getPeriodDateRange() {
         const today = new Date();
