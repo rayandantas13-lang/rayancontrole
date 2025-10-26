@@ -356,54 +356,65 @@ class InventorySystem {
     }
 
     async generatePDFReport(data) {
-        try {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            // Configurações do documento
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const margin = 20;
-            let yPosition = margin;
-            
-            // Cabeçalho
-            doc.setFillColor(139, 92, 246); // Cor primária
-            doc.rect(0, 0, pageWidth, 40, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(20);
-            doc.setFont('helvetica', 'bold');
-            doc.text('RELATÓRIO DE ESTOQUE', pageWidth / 2, 20, { align: 'center' });
-            
-            // Informações do relatório
-            yPosition = 60;
-            doc.setTextColor(0, 0, 0);
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            
-            const reportType = data.type === 'products' ? 'Produtos em Estoque' : 'Produtos Requisitados';
-            doc.text(`Tipo: ${reportType}`, margin, yPosition);
-            yPosition += 10;
-            doc.text(`Período: ${this.getPeriodLabel(data.period)}`, margin, yPosition);
-            yPosition += 10;
-            doc.text(`Gerado em: ${data.generatedAt}`, margin, yPosition);
-            yPosition += 10;
-            doc.text(`Gerado por: ${data.generatedBy}`, margin, yPosition);
-            yPosition += 20;
-            
-            if (data.type === 'products') {
-                await this.generateProductsPDF(doc, data, margin, pageWidth, yPosition);
-            } else {
-                await this.generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition);
-            }
-            
-            // Salvar o PDF
-            const fileName = `relatorio_${data.type}_${new Date().getTime()}.pdf`;
-            doc.save(fileName);
-            
-        } catch (error) {
-            console.error('Erro ao gerar PDF:', error);
-            throw new Error('Falha ao gerar PDF');
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Configurações do documento
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 20;
+        let yPosition = margin;
+        
+        // ========== CABEÇALHO CORRIGIDO ==========
+        doc.setFillColor(139, 92, 246); // Cor primária do tema
+        doc.rect(0, 0, pageWidth, 50, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('RELATÓRIO DE ESTOQUE - ALMOXARIFADO', pageWidth / 2, 25, { align: 'center' });
+        
+        // Informações do relatório
+        yPosition = 70;
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        
+        const reportType = data.type === 'products' ? 'Produtos em Estoque' : 'Produtos Requisitados';
+        const periodLabel = this.getPeriodLabel(data.period);
+        
+        doc.text(`Tipo do Relatório: ${reportType}`, margin, yPosition);
+        yPosition += 8;
+        doc.text(`Período: ${periodLabel}`, margin, yPosition);
+        yPosition += 8;
+        
+        // Data de geração - CORRIGIDA
+        const generatedAt = new Date().toLocaleDateString('pt-BR') + ' ' + 
+                           new Date().toLocaleTimeString('pt-BR', { 
+                               hour: '2-digit', 
+                               minute: '2-digit',
+                               hour12: false 
+                           });
+        doc.text(`Gerado em: ${generatedAt}`, margin, yPosition);
+        yPosition += 8;
+        doc.text(`Gerado por: ${data.generatedBy || 'Sistema'}`, margin, yPosition);
+        yPosition += 20;
+        
+        // Resto do código permanece igual...
+        if (data.type === 'products') {
+            await this.generateProductsPDF(doc, data, margin, pageWidth, yPosition);
+        } else {
+            await this.generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition);
         }
+        
+        // Salvar o PDF
+        const fileName = `relatorio_${data.type}_${new Date().getTime()}.pdf`;
+        doc.save(fileName);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        throw new Error('Falha ao gerar PDF');
     }
+}
 
     async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
     doc.setFontSize(16);
@@ -508,9 +519,13 @@ class InventorySystem {
 }
 
 async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
+    // Configurar fonte que suporte caracteres portugueses
+    doc.setFont('helvetica');
+    
+    // Cabeçalho principal
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('PRODUTOS REQUISITADOS', margin, yPosition);
+    doc.text('PRODUTOS REQUISITADOS', pageWidth / 2, yPosition, { align: 'center' });
     yPosition += 25;
     
     if (data.data.length === 0) {
@@ -521,73 +536,147 @@ async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
     }
     
     const pageHeight = doc.internal.pageSize.getHeight();
-    const sectionSpacing = 15;
     
     data.data.forEach((requisition, reqIndex) => {
-        // Verificar se precisa de nova página antes de adicionar nova requisição
-        if (yPosition > pageHeight - 100) { // Margem de segurança de 100px
+        // Verificar se precisa de nova página
+        if (yPosition > pageHeight - 150) {
             doc.addPage();
             yPosition = margin;
         }
         
-        // Cabeçalho da requisição
-        doc.setFillColor(240, 240, 240);
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 18, 'F');
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
+        // ========== CABEÇALHO DA REQUISIÇÃO ==========
+        doc.setFillColor(139, 92, 246); // Cor roxa do tema
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 25, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         
-        doc.text(`Requisição #${requisition.id}`, margin + 5, yPosition + 10);
-        doc.text(`Status: ${requisition.status}`, margin + 80, yPosition + 10);
-        doc.text(`Data: ${this.formatDateTime(requisition.createdAt)}`, pageWidth - margin - 100, yPosition + 10);
+        // Número da requisição - CORRIGIDO
+        const requisitionId = requisition.id || 'N/A';
+        doc.text(`Requisição #${requisitionId}`, margin + 10, yPosition + 10);
         
-        yPosition += 23;
+        // Status
+        const status = requisition.status || 'Pendente';
+        doc.text(`Status: ${status}`, margin + 120, yPosition + 10);
         
-        // Produtos da requisição
+        // Data - CORRIGIDO (usando formatação segura)
+        const createdAt = requisition.createdAt ? 
+            new Date(requisition.createdAt).toLocaleDateString('pt-BR') : 
+            'Data não disponível';
+        doc.text(`Data: ${createdAt}`, pageWidth - margin - 120, yPosition + 10);
+        
+        yPosition += 30;
+        
+        // ========== INFORMAÇÕES ADICIONAIS ==========
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
+        
+        // Informações do solicitante
+        if (requisition.createdBy) {
+            doc.text(`Solicitante: ${requisition.createdBy}`, margin + 10, yPosition);
+            yPosition += 8;
+        }
+        
+        if (requisition.description) {
+            const descLines = doc.splitTextToSize(`Descrição: ${requisition.description}`, pageWidth - 2 * margin - 20);
+            doc.text(descLines, margin + 10, yPosition);
+            yPosition += descLines.length * 6 + 5;
+        }
+        
+        yPosition += 10;
+        
+        // ========== CABEÇALHO DA TABELA DE PRODUTOS ==========
+        doc.setFillColor(200, 200, 200);
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+        doc.setTextColor(0, 0, 0);
         doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        
+        const colWidth = (pageWidth - 2 * margin) / 4;
+        doc.text('PRODUTO', margin + 5, yPosition + 8);
+        doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
+        doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
+        doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
+        
+        yPosition += 15;
+        
+        // ========== LISTA DE PRODUTOS ==========
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
         
         requisition.products.forEach((product, prodIndex) => {
-            // Verificar espaço na página para o próximo produto
-            if (yPosition > pageHeight - 30) {
+            // Verificar espaço para próximo produto
+            if (yPosition > pageHeight - 20) {
                 doc.addPage();
                 yPosition = margin;
+                
+                // Redesenhar cabeçalho na nova página
+                doc.setFillColor(200, 200, 200);
+                doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                
+                doc.text('PRODUTO', margin + 5, yPosition + 8);
+                doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
+                doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
+                doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
+                
+                yPosition += 15;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
             }
             
-            const productText = `• ${product.name} (Cód: ${product.code})`;
-            const requestedText = `Requisitado: ${this.formatNumber(product.requestedQuantity)}`;
-            const availableText = `Disponível: ${this.formatNumber(product.availableQuantity)}`;
+            // Nome do produto (com quebra de linha se necessário)
+            const productName = product.name || 'Produto não informado';
+            const nameLines = doc.splitTextToSize(productName, colWidth - 10);
             
-            // Quebrar texto longo do produto
-            const maxWidth = pageWidth - 2 * margin - 120;
-            const productLines = doc.splitTextToSize(productText, maxWidth);
+            // Código do produto
+            const productCode = product.code || 'N/A';
+            
+            // Quantidades
+            const requestedQty = this.formatNumber(product.requestedQuantity || 0);
+            const availableQty = this.formatNumber(product.availableQuantity || 0);
             
             // Desenhar primeira linha
-            doc.text(productLines[0], margin + 10, yPosition + 7);
-            doc.text(requestedText, margin + 120, yPosition + 7);
-            doc.text(availableText, pageWidth - margin - 80, yPosition + 7);
+            doc.text(nameLines[0], margin + 5, yPosition + 6);
+            doc.text(productCode, margin + colWidth + 5, yPosition + 6);
+            doc.text(requestedQty, margin + 2 * colWidth + 5, yPosition + 6);
+            doc.text(availableQty, margin + 3 * colWidth + 5, yPosition + 6);
             
-            // Se tiver segunda linha, desenhar abaixo
-            if (productLines.length > 1) {
+            // Se o nome tiver múltiplas linhas, ajustar altura
+            if (nameLines.length > 1) {
                 yPosition += 6;
-                doc.text(productLines[1], margin + 10, yPosition + 7);
+                doc.text(nameLines[1], margin + 5, yPosition + 6);
             }
             
             yPosition += 12; // Espaçamento entre produtos
         });
         
-        yPosition += sectionSpacing; // Espaço entre requisições
+        yPosition += 15; // Espaço entre requisições
+        
+        // ========== RESUMO DA REQUISIÇÃO ==========
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total de itens requisitados: ${this.formatNumber(requisition.totalRequested || 0)}`, margin, yPosition);
+        
+        yPosition += 20; // Espaço para próxima requisição
     });
     
-    // Resumo
-    yPosition += 10;
-    doc.setFont('helvetica', 'bold');
+    // ========== RESUMO GERAL ==========
+    if (yPosition > pageHeight - 30) {
+        doc.addPage();
+        yPosition = margin;
+    }
+    
     doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
     doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
     yPosition += 12;
     
     const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
-    doc.text(`Total de Itens Requisitados: ${this.formatNumber(totalRequested)}`, margin, yPosition);
+    doc.text(`Total Geral de Itens: ${this.formatNumber(totalRequested)}`, margin, yPosition);
 }
 
     getPeriodLabel(period) {
