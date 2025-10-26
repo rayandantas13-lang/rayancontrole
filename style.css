@@ -2189,3 +2189,116 @@ form {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-hover);
 }
+
+/* Estilos para seleção de lotes */
+.lote-selection-section {
+    margin-top: var(--spacing-xl);
+}
+
+.available-lotes-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+}
+
+.lote-selection-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+.lote-selection-item:hover {
+    background: var(--bg-secondary);
+}
+
+.lote-selection-item.selected {
+    background: rgba(139, 92, 246, 0.1);
+    border-left: 4px solid var(--primary-color);
+}
+
+.lote-selection-info {
+    flex: 1;
+}
+
+.lote-selection-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+}
+
+.quantity-selection {
+    text-align: center;
+}
+
+.quantity-selection label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.lote-quantity-input {
+    width: 80px;
+    padding: var(--spacing-sm);
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.lote-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.selection-summary {
+    background: var(--bg-secondary);
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.selected-lotes-summary {
+    max-height: 150px;
+    overflow-y: auto;
+    margin: var(--spacing-md) 0;
+}
+
+.selected-lote-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm);
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-xs);
+}
+
+.total-selected {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: var(--primary-light);
+    border-radius: var(--border-radius);
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.product-info-header {
+    background: var(--bg-secondary);
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+    border-left: 4px solid var(--primary-color);
+}
+
+.select-lotes-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
