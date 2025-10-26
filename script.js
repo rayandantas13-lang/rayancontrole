@@ -2840,14 +2840,6 @@ confirmLoteSelection() {
         alert('Selecione pelo menos um lote e informe a quantidade.');
         return;
     }
-    const totalSelected = this.selectedLotesForRequisition.reduce(
-        (sum, selected) => sum + selected.quantity, 0
-    );
-    
-    if (totalSelected === 0) {
-        alert('Selecione pelo menos um lote e informe a quantidade.');
-        return;
-    }
     
     // Adicionar produto aos selecionados para requisição
     const existingIndex = this.selectedProductsForRequisition.findIndex(
