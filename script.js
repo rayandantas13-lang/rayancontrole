@@ -21,23 +21,27 @@ const db = getFirestore(app);
 
 class InventorySystem {
     constructor() {
-        this.products = [];
-        this.requisitions = [];
-        this.selectedProductsForRequisition = [];
-        this.currentTab = 'products';
-        this.nextRequisitionNumber = 1;
-        this.currentUser = null;
-        this.userRole = 'guest';
-        this.currentLotes = []; // Array para armazenar lotes temporários
-        this.editingLoteIndex = -1; // Índice do lote sendo editado
-        
-        // Variáveis para controle do relatório
-        this.currentReportType = null;
-        this.currentPeriod = null;
-        this.currentFormat = null;
-        
-        this.init();
-    }
+    this.products = [];
+    this.requisitions = [];
+    this.selectedProductsForRequisition = [];
+    this.currentTab = 'products';
+    this.nextRequisitionNumber = 1;
+    this.currentUser = null;
+    this.userRole = 'guest';
+    this.currentLotes = [];
+    this.editingLoteIndex = -1;
+    
+    // NOVAS VARIÁVEIS PARA SELEÇÃO DE LOTES
+    this.currentProductForLoteSelection = null;
+    this.selectedLotesForRequisition = [];
+    
+    // Variáveis para controle do relatório
+    this.currentReportType = null;
+    this.currentPeriod = null;
+    this.currentFormat = null;
+    
+    this.init();
+}
 
     async init() {
         this.setupEventListeners();
@@ -1981,7 +1985,7 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
             const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
             
             return `
-            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}" data-location="${this.escapeHtml(product.local ?? '')}">
+            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}">
                 <div class="available-product-info">
                     <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
                     <div class="available-product-details">
@@ -1998,7 +2002,7 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 </div>
                 <div class="product-selection-controls">
                     <button type="button" class="btn-secondary select-lotes-btn" 
-                            onclick="window.inventorySystem.openLoteSelectionModal(${JSON.stringify(product).replace(/"/g, '&quot;')})">
+                            data-product-id="${product.id}">
                         Selecionar Lotes
                     </button>
                     <input type="checkbox" 
@@ -2007,10 +2011,22 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                            ${isSelected ? 'checked' : ''}>
                 </div>
             </div>
-        `;
+            `;
         }).join('');
 
-        // Remover o event listener antigo do checkbox e adicionar um novo
+        // EVENT LISTENER PARA OS BOTÕES "SELECIONAR LOTES"
+        availableProductsList.querySelectorAll('.select-lotes-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const productId = e.target.dataset.productId;
+                const product = this.products.find(p => p.id === productId);
+                if (product) {
+                    console.log('Abrindo seleção de lotes para:', product.name);
+                    this.openLoteSelectionModal(product);
+                }
+            });
+        });
+
+        // Event listener para os checkboxes
         availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
                 const productId = e.target.value;
@@ -2018,7 +2034,20 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 
                 if (e.target.checked) {
                     productItem.classList.add('selected');
-                    // Não adiciona automaticamente, espera a seleção de lotes
+                    // Marcar como selecionado, mas esperar a seleção de lotes
+                    const product = this.products.find(p => p.id === productId);
+                    if (product && !this.selectedProductsForRequisition.some(p => p.id === productId)) {
+                        // Adicionar com lotes vazios por enquanto
+                        this.selectedProductsForRequisition.push({
+                            id: product.id,
+                            name: product.name,
+                            code: product.code,
+                            local: product.local,
+                            availableQuantity: product.quantity,
+                            requestedQuantity: 0,
+                            selectedLotes: []
+                        });
+                    }
                 } else {
                     productItem.classList.remove('selected');
                     // Remover da lista de selecionados
@@ -2284,6 +2313,29 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         
         const cancelLoteBtn = document.getElementById('cancelLoteBtn');
         if (cancelLoteBtn) cancelLoteBtn.addEventListener('click', () => this.closeLoteModal());
+
+      const confirmLoteSelectionBtn = document.getElementById('confirmLoteSelectionBtn');
+    if (confirmLoteSelectionBtn) {
+        confirmLoteSelectionBtn.addEventListener('click', () => {
+            console.log('Botão confirmar lotes clicado');
+            this.confirmLoteSelection();
+        });
+    }
+    
+    const cancelLoteSelectionBtn = document.getElementById('cancelLoteSelectionBtn');
+    if (cancelLoteSelectionBtn) {
+        cancelLoteSelectionBtn.addEventListener('click', () => {
+            console.log('Botão cancelar lotes clicado');
+            this.closeLoteSelectionModal();
+        });
+    }
+    
+    const closeLoteSelectionModal = document.getElementById('closeLoteSelectionModal');
+    if (closeLoteSelectionModal) {
+        closeLoteSelectionModal.addEventListener('click', () => {
+            this.closeLoteSelectionModal();
+        });
+    }
 
         const loteForm = document.getElementById('loteForm');
         if (loteForm) {
@@ -2568,13 +2620,19 @@ selectedLotesForRequisition = [];
 
 // Método para abrir a seleção de lotes
 openLoteSelectionModal(product) {
+    console.log('Abrindo modal de lotes para:', product.name);
+    
     this.currentProductForLoteSelection = product;
     this.selectedLotesForRequisition = [];
     
     // Preencher informações do produto
-    document.getElementById('selectedProductName').textContent = product.name;
-    document.getElementById('selectedProductCode').textContent = `Código: ${product.code}`;
-    document.getElementById('totalAvailableQuantity').textContent = this.formatNumber(product.quantity);
+    const productNameEl = document.getElementById('selectedProductName');
+    const productCodeEl = document.getElementById('selectedProductCode');
+    const totalAvailableEl = document.getElementById('totalAvailableQuantity');
+    
+    if (productNameEl) productNameEl.textContent = product.name;
+    if (productCodeEl) productCodeEl.textContent = `Código: ${product.code}`;
+    if (totalAvailableEl) totalAvailableEl.textContent = this.formatNumber(product.quantity);
     
     this.populateAvailableLotes(product);
     this.updateLoteSelectionSummary();
@@ -2585,6 +2643,9 @@ openLoteSelectionModal(product) {
     if (modal && modalOverlay) {
         modal.classList.add('active');
         modalOverlay.classList.add('active');
+        console.log('Modal de lotes aberto');
+    } else {
+        console.error('Elementos do modal não encontrados');
     }
 }
 
@@ -2766,6 +2827,19 @@ updateLoteSelectionSummary() {
 
 // Confirmar seleção de lotes
 confirmLoteSelection() {
+  console.log('confirmLoteSelection chamado');
+    
+    const totalSelected = this.selectedLotesForRequisition.reduce(
+        (sum, selected) => sum + selected.quantity, 0
+    );
+    
+    console.log('Total selecionado:', totalSelected);
+    console.log('Lotes selecionados:', this.selectedLotesForRequisition);
+    
+    if (totalSelected === 0) {
+        alert('Selecione pelo menos um lote e informe a quantidade.');
+        return;
+    }
     const totalSelected = this.selectedLotesForRequisition.reduce(
         (sum, selected) => sum + selected.quantity, 0
     );
