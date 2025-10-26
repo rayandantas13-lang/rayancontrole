@@ -406,122 +406,189 @@ class InventorySystem {
     }
 
     async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text('PRODUTOS EM ESTOQUE', margin, yPosition);
-        yPosition += 20;
-        
-        if (data.data.length === 0) {
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
-            return;
-        }
-        
-        // Cabeçalho da tabela
-        doc.setFillColor(200, 200, 200);
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 10, 'F');
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        
-        const colWidth = (pageWidth - 2 * margin) / 5;
-        doc.text('Código', margin + 5, yPosition + 7);
-        doc.text('Nome', margin + colWidth + 5, yPosition + 7);
-        doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 7);
-        doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 7);
-        doc.text('Status', margin + 4 * colWidth + 5, yPosition + 7);
-        
-        yPosition += 15;
-        
-        // Dados dos produtos
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PRODUTOS EM ESTOQUE', margin, yPosition);
+    yPosition += 25; // Aumentei o espaçamento
+    
+    if (data.data.length === 0) {
+        doc.setFontSize(12);
         doc.setFont('helvetica', 'normal');
-        data.data.forEach((product, index) => {
-            // Verificar se precisa de nova página
-            if (yPosition > 270) {
-                doc.addPage();
-                yPosition = margin;
-            }
-            
-            doc.text(product.code || '-', margin + 5, yPosition + 7);
-            doc.text(product.name || '-', margin + colWidth + 5, yPosition + 7);
-            doc.text(product.local || '-', margin + 2 * colWidth + 5, yPosition + 7);
-            doc.text(this.formatNumber(product.quantity || 0), margin + 3 * colWidth + 5, yPosition + 7);
-            doc.text(product.expiryStatus?.label || '-', margin + 4 * colWidth + 5, yPosition + 7);
-            
-            yPosition += 10;
-        });
-        
-        // Resumo
-        yPosition += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Total de Produtos: ${this.formatNumber(data.data.length)}`, margin, yPosition);
-        yPosition += 10;
-        
-        const totalQuantity = data.data.reduce((sum, product) => sum + (product.quantity || 0), 0);
-        doc.text(`Quantidade Total em Estoque: ${this.formatNumber(totalQuantity)}`, margin, yPosition);
+        doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
+        return;
     }
-
-    async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text('PRODUTOS REQUISITADOS', margin, yPosition);
-        yPosition += 20;
-        
-        if (data.data.length === 0) {
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            doc.text('Nenhuma requisição encontrada para o período selecionado.', margin, yPosition);
-            return;
-        }
-        
-        data.data.forEach((requisition, reqIndex) => {
-            // Verificar se precisa de nova página
-            if (yPosition > 200) {
-                doc.addPage();
-                yPosition = margin;
-            }
+    
+    // Configurações de layout melhoradas
+    const lineHeight = 12;
+    const rowHeight = 18; // Aumentei significativamente a altura da linha
+    const headerHeight = 16;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Cabeçalho da tabela com mais altura
+    doc.setFillColor(200, 200, 200);
+    doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    
+    const colWidth = (pageWidth - 2 * margin) / 5;
+    doc.text('Código', margin + 5, yPosition + 10);
+    doc.text('Nome', margin + colWidth + 5, yPosition + 10);
+    doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 10);
+    doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 10);
+    doc.text('Status', margin + 4 * colWidth + 5, yPosition + 10);
+    
+    yPosition += headerHeight + 5;
+    
+    // Dados dos produtos com espaçamento adequado
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9); // Reduzi um pouco a fonte para caber mais conteúdo
+    
+    data.data.forEach((product, index) => {
+        // Verificar se precisa de nova página (com margem de segurança)
+        if (yPosition + rowHeight > pageHeight - margin) {
+            doc.addPage();
+            yPosition = margin;
             
-            // Cabeçalho da requisição
-            doc.setFillColor(240, 240, 240);
-            doc.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F');
+            // Re-desenhar cabeçalho da tabela na nova página
+            doc.setFillColor(200, 200, 200);
+            doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             
-            doc.text(`Requisição #${requisition.id}`, margin + 5, yPosition + 7);
-            doc.text(`Status: ${requisition.status}`, margin + 80, yPosition + 7);
-            doc.text(`Data: ${this.formatDateTime(requisition.createdAt)}`, pageWidth - margin - 100, yPosition + 7);
+            doc.text('Código', margin + 5, yPosition + 10);
+            doc.text('Nome', margin + colWidth + 5, yPosition + 10);
+            doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 10);
+            doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 10);
+            doc.text('Status', margin + 4 * colWidth + 5, yPosition + 10);
             
-            yPosition += 20;
-            
-            // Produtos da requisição
+            yPosition += headerHeight + 5;
             doc.setFont('helvetica', 'normal');
-            requisition.products.forEach((product, prodIndex) => {
-                if (yPosition > 270) {
-                    doc.addPage();
-                    yPosition = margin;
-                }
-                
-                doc.text(`• ${product.name} (Cód: ${product.code})`, margin + 10, yPosition + 7);
-                doc.text(`Requisitado: ${this.formatNumber(product.requestedQuantity)}`, margin + 120, yPosition + 7);
-                doc.text(`Disponível: ${this.formatNumber(product.availableQuantity)}`, pageWidth - margin - 80, yPosition + 7);
-                
-                yPosition += 10;
-            });
+            doc.setFontSize(9);
+        }
+        
+        // Texto com posicionamento vertical melhorado
+        const textY = yPosition + 8;
+        doc.text(product.code || '-', margin + 5, textY);
+        
+        // Quebrar texto longo do nome em múltiplas linhas
+        const productName = product.name || '-';
+        const maxNameWidth = colWidth - 10;
+        const nameLines = doc.splitTextToSize(productName, maxNameWidth);
+        
+        if (nameLines.length > 1) {
+            // Se o nome tiver múltiplas linhas, ajustar a altura
+            doc.text(nameLines[0], margin + colWidth + 5, textY);
+            if (nameLines.length > 1) {
+                doc.text(nameLines[1], margin + colWidth + 5, textY + 5);
+            }
+        } else {
+            doc.text(productName, margin + colWidth + 5, textY);
+        }
+        
+        doc.text(product.local || '-', margin + 2 * colWidth + 5, textY);
+        doc.text(this.formatNumber(product.quantity || 0), margin + 3 * colWidth + 5, textY);
+        doc.text(product.expiryStatus?.label || '-', margin + 4 * colWidth + 5, textY);
+        
+        // Ajustar altura baseado no número de linhas do nome
+        const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
+        yPosition += actualRowHeight;
+    });
+    
+    // Resumo com mais espaçamento
+    yPosition += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(`Total de Produtos: ${this.formatNumber(data.data.length)}`, margin, yPosition);
+    yPosition += 12;
+    
+    const totalQuantity = data.data.reduce((sum, product) => sum + (product.quantity || 0), 0);
+    doc.text(`Quantidade Total em Estoque: ${this.formatNumber(totalQuantity)}`, margin, yPosition);
+}
+
+async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PRODUTOS REQUISITADOS', margin, yPosition);
+    yPosition += 25;
+    
+    if (data.data.length === 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Nenhuma requisição encontrada para o período selecionado.', margin, yPosition);
+        return;
+    }
+    
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const sectionSpacing = 15;
+    
+    data.data.forEach((requisition, reqIndex) => {
+        // Verificar se precisa de nova página antes de adicionar nova requisição
+        if (yPosition > pageHeight - 100) { // Margem de segurança de 100px
+            doc.addPage();
+            yPosition = margin;
+        }
+        
+        // Cabeçalho da requisição
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 18, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        
+        doc.text(`Requisição #${requisition.id}`, margin + 5, yPosition + 10);
+        doc.text(`Status: ${requisition.status}`, margin + 80, yPosition + 10);
+        doc.text(`Data: ${this.formatDateTime(requisition.createdAt)}`, pageWidth - margin - 100, yPosition + 10);
+        
+        yPosition += 23;
+        
+        // Produtos da requisição
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        
+        requisition.products.forEach((product, prodIndex) => {
+            // Verificar espaço na página para o próximo produto
+            if (yPosition > pageHeight - 30) {
+                doc.addPage();
+                yPosition = margin;
+            }
             
-            yPosition += 10;
+            const productText = `• ${product.name} (Cód: ${product.code})`;
+            const requestedText = `Requisitado: ${this.formatNumber(product.requestedQuantity)}`;
+            const availableText = `Disponível: ${this.formatNumber(product.availableQuantity)}`;
+            
+            // Quebrar texto longo do produto
+            const maxWidth = pageWidth - 2 * margin - 120;
+            const productLines = doc.splitTextToSize(productText, maxWidth);
+            
+            // Desenhar primeira linha
+            doc.text(productLines[0], margin + 10, yPosition + 7);
+            doc.text(requestedText, margin + 120, yPosition + 7);
+            doc.text(availableText, pageWidth - margin - 80, yPosition + 7);
+            
+            // Se tiver segunda linha, desenhar abaixo
+            if (productLines.length > 1) {
+                yPosition += 6;
+                doc.text(productLines[1], margin + 10, yPosition + 7);
+            }
+            
+            yPosition += 12; // Espaçamento entre produtos
         });
         
-        // Resumo
-        yPosition += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
-        yPosition += 10;
-        
-        const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
-        doc.text(`Total de Itens Requisitados: ${this.formatNumber(totalRequested)}`, margin, yPosition);
-    }
+        yPosition += sectionSpacing; // Espaço entre requisições
+    });
+    
+    // Resumo
+    yPosition += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
+    yPosition += 12;
+    
+    const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
+    doc.text(`Total de Itens Requisitados: ${this.formatNumber(totalRequested)}`, margin, yPosition);
+}
 
     getPeriodLabel(period) {
         const labels = {
