@@ -413,11 +413,11 @@ groupProductsBySector(products) {
     }
 }
 
-    async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
+   async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('PRODUTOS EM ESTOQUE', margin, yPosition);
-    yPosition += 25; // Aumentei o espaçamento
+    doc.text('PRODUTOS EM ESTOQUE - ORGANIZADO POR SETOR', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 25;
     
     if (data.data.length === 0) {
         doc.setFontSize(12);
@@ -428,91 +428,142 @@ groupProductsBySector(products) {
     
     // Configurações de layout melhoradas
     const lineHeight = 12;
-    const rowHeight = 18; // Aumentei significativamente a altura da linha
+    const rowHeight = 18;
     const headerHeight = 16;
     const pageHeight = doc.internal.pageSize.getHeight();
+    const sectorSpacing = 25; // Espaço entre setores
     
-    // Cabeçalho da tabela com mais altura
-    doc.setFillColor(200, 200, 200);
-    doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    
-    const colWidth = (pageWidth - 2 * margin) / 5;
-    doc.text('Código', margin + 5, yPosition + 10);
-    doc.text('Nome', margin + colWidth + 5, yPosition + 10);
-    doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 10);
-    doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 10);
-    doc.text('Status', margin + 4 * colWidth + 5, yPosition + 10);
-    
-    yPosition += headerHeight + 5;
-    
-    // Dados dos produtos com espaçamento adequado
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9); // Reduzi um pouco a fonte para caber mais conteúdo
-    
-    data.data.forEach((product, index) => {
-        // Verificar se precisa de nova página (com margem de segurança)
-        if (yPosition + rowHeight > pageHeight - margin) {
+    // PERCORRER CADA SETOR
+    data.data.forEach((sectorData, sectorIndex) => {
+        // Verificar se precisa de nova página antes de começar um novo setor
+        if (yPosition > pageHeight - 100) {
             doc.addPage();
             yPosition = margin;
-            
-            // Re-desenhar cabeçalho da tabela na nova página
+        }
+        
+        // ========== CABEÇALHO DO SETOR ==========
+        doc.setFillColor(79, 70, 229); // Azul escuro para setores
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        
+        doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()}`, margin + 10, yPosition + 12);
+        
+        yPosition += 25;
+        
+        // ========== CABEÇALHO DA TABELA DO SETOR ==========
+        if (sectorData.products.length > 0) {
             doc.setFillColor(200, 200, 200);
             doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             
-            doc.text('Código', margin + 5, yPosition + 10);
-            doc.text('Nome', margin + colWidth + 5, yPosition + 10);
-            doc.text('Setor', margin + 2 * colWidth + 5, yPosition + 10);
-            doc.text('Quantidade', margin + 3 * colWidth + 5, yPosition + 10);
-            doc.text('Status', margin + 4 * colWidth + 5, yPosition + 10);
+            const colWidth = (pageWidth - 2 * margin) / 5;
+            doc.text('CÓDIGO', margin + 5, yPosition + 10);
+            doc.text('NOME DO PRODUTO', margin + colWidth + 5, yPosition + 10);
+            doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
+            doc.text('STATUS', margin + 3 * colWidth + 5, yPosition + 10);
+            doc.text('ÚLT. ATUAL.', margin + 4 * colWidth + 5, yPosition + 10);
             
             yPosition += headerHeight + 5;
+            
+            // ========== PRODUTOS DO SETOR ==========
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
+            
+            sectorData.products.forEach((product, productIndex) => {
+                // Verificar se precisa de nova página
+                if (yPosition + rowHeight > pageHeight - margin) {
+                    doc.addPage();
+                    yPosition = margin;
+                    
+                    // Redesenhar cabeçalho do setor na nova página
+                    doc.setFillColor(79, 70, 229);
+                    doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()} (Continuação)`, margin + 10, yPosition + 12);
+                    yPosition += 25;
+                    
+                    // Redesenhar cabeçalho da tabela
+                    doc.setFillColor(200, 200, 200);
+                    doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    
+                    doc.text('CÓDIGO', margin + 5, yPosition + 10);
+                    doc.text('NOME DO PRODUTO', margin + colWidth + 5, yPosition + 10);
+                    doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
+                    doc.text('STATUS', margin + 3 * colWidth + 5, yPosition + 10);
+                    doc.text('ÚLT. ATUAL.', margin + 4 * colWidth + 5, yPosition + 10);
+                    
+                    yPosition += headerHeight + 5;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(9);
+                }
+                
+                // Texto com posicionamento vertical melhorado
+                const textY = yPosition + 8;
+                doc.text(product.code || '-', margin + 5, textY);
+                
+                // Quebrar texto longo do nome em múltiplas linhas
+                const productName = product.name || '-';
+                const maxNameWidth = colWidth - 10;
+                const nameLines = doc.splitTextToSize(productName, maxNameWidth);
+                
+                if (nameLines.length > 1) {
+                    doc.text(nameLines[0], margin + colWidth + 5, textY);
+                    doc.text(nameLines[1], margin + colWidth + 5, textY + 5);
+                } else {
+                    doc.text(productName, margin + colWidth + 5, textY);
+                }
+                
+                doc.text(this.formatNumber(product.quantity || 0), margin + 2 * colWidth + 5, textY);
+                doc.text(product.expiryStatus?.label || '-', margin + 3 * colWidth + 5, textY);
+                doc.text(product.lastUpdated || '-', margin + 4 * colWidth + 5, textY);
+                
+                // Ajustar altura baseado no número de linhas do nome
+                const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
+                yPosition += actualRowHeight;
+            });
+            
+            // ========== RESUMO DO SETOR ==========
+            yPosition += 10;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            const sectorTotal = sectorData.products.reduce((sum, product) => sum + (product.quantity || 0), 0);
+            doc.text(`Total do Setor: ${this.formatNumber(sectorData.products.length)} produtos, ${this.formatNumber(sectorTotal)} itens`, margin, yPosition);
+            
+            yPosition += sectorSpacing;
         }
-        
-        // Texto com posicionamento vertical melhorado
-        const textY = yPosition + 8;
-        doc.text(product.code || '-', margin + 5, textY);
-        
-        // Quebrar texto longo do nome em múltiplas linhas
-        const productName = product.name || '-';
-        const maxNameWidth = colWidth - 10;
-        const nameLines = doc.splitTextToSize(productName, maxNameWidth);
-        
-        if (nameLines.length > 1) {
-            // Se o nome tiver múltiplas linhas, ajustar a altura
-            doc.text(nameLines[0], margin + colWidth + 5, textY);
-            if (nameLines.length > 1) {
-                doc.text(nameLines[1], margin + colWidth + 5, textY + 5);
-            }
-        } else {
-            doc.text(productName, margin + colWidth + 5, textY);
-        }
-        
-        doc.text(product.local || '-', margin + 2 * colWidth + 5, textY);
-        doc.text(this.formatNumber(product.quantity || 0), margin + 3 * colWidth + 5, textY);
-        doc.text(product.expiryStatus?.label || '-', margin + 4 * colWidth + 5, textY);
-        
-        // Ajustar altura baseado no número de linhas do nome
-        const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
-        yPosition += actualRowHeight;
     });
     
-    // Resumo com mais espaçamento
-    yPosition += 15;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(`Total de Produtos: ${this.formatNumber(data.data.length)}`, margin, yPosition);
-    yPosition += 12;
+    // ========== RESUMO GERAL ==========
+    if (yPosition > pageHeight - 30) {
+        doc.addPage();
+        yPosition = margin;
+    }
     
-    const totalQuantity = data.data.reduce((sum, product) => sum + (product.quantity || 0), 0);
-    doc.text(`Quantidade Total em Estoque: ${this.formatNumber(totalQuantity)}`, margin, yPosition);
+    yPosition += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    
+    const totalProducts = data.data.reduce((sum, sector) => sum + sector.products.length, 0);
+    const totalQuantity = data.data.reduce((sum, sector) => 
+        sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.quantity || 0), 0), 0
+    );
+    
+    doc.text(`RESUMO GERAL:`, margin, yPosition);
+    yPosition += 12;
+    doc.text(`• ${this.formatNumber(data.data.length)} Setores`, margin + 10, yPosition);
+    yPosition += 10;
+    doc.text(`• ${this.formatNumber(totalProducts)} Produtos`, margin + 10, yPosition);
+    yPosition += 10;
+    doc.text(`• ${this.formatNumber(totalQuantity)} Itens em Estoque`, margin + 10, yPosition);
 }
 
 async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
@@ -690,16 +741,17 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
     }
 
     async generateExcelReport(data) {
-        try {
-            // Criar workbook
-            const wb = XLSX.utils.book_new();
-            
-            if (data.type === 'products') {
-                // Preparar dados para produtos
-                const excelData = data.data.map(product => ({
+    try {
+        // Criar workbook
+        const wb = XLSX.utils.book_new();
+        
+        if (data.type === 'products') {
+            // ORGANIZADO POR SETOR NO EXCEL
+            data.data.forEach((sectorData, sectorIndex) => {
+                // Preparar dados para produtos do setor
+                const excelData = sectorData.products.map(product => ({
                     'Código': product.code,
-                    'Nome': product.name,
-                    'Setor': product.local,
+                    'Nome do Produto': product.name,
                     'Quantidade': product.quantity,
                     'Descrição': product.description,
                     'Última Atualização': product.lastUpdated,
@@ -707,36 +759,66 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                     'Número de Lotes': product.lotes?.length || 0
                 }));
                 
-                const ws = XLSX.utils.json_to_sheet(excelData);
-                XLSX.utils.book_append_sheet(wb, ws, "Produtos em Estoque");
+                // Nome da aba baseado no setor (limitado a 31 caracteres)
+                let sheetName = sectorData.sectorName || 'Sem Setor';
+                sheetName = sheetName.substring(0, 31); // Excel limita a 31 caracteres
                 
-            } else {
-                // Preparar dados para requisições
-                const excelData = data.data.map(requisition => ({
-                    'ID Requisição': requisition.id,
-                    'Status': requisition.status,
-                    'Total Requisitado': requisition.totalRequested,
-                    'Quantidade Finalizada': requisition.finalizedQuantity || 0,
-                    'Data': this.formatDateTime(requisition.createdAt),
-                    'Solicitante': requisition.createdBy,
-                    'Descrição': requisition.description,
-                    'Setor': requisition.local,
-                    'Número de Produtos': requisition.products?.length || 0
-                }));
+                // Se o nome for muito longo, adicionar número
+                if (sheetName.length === 31) {
+                    sheetName = sheetName.substring(0, 28) + '...';
+                }
+                
+                // Garantir nomes únicos
+                let finalSheetName = sheetName;
+                let counter = 1;
+                while (wb.SheetNames.includes(finalSheetName)) {
+                    finalSheetName = `${sheetName.substring(0, 26)}_${counter}`;
+                    counter++;
+                }
                 
                 const ws = XLSX.utils.json_to_sheet(excelData);
-                XLSX.utils.book_append_sheet(wb, ws, "Requisições");
+                XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
+                
+                // Adicionar cabeçalho do setor como primeira linha
+                if (excelData.length > 0) {
+                    XLSX.utils.sheet_add_aoa(ws, [[`SETOR: ${sectorData.sectorName}`]], { origin: -1 });
+                    XLSX.utils.sheet_add_aoa(ws, [['']], { origin: -1 }); // Linha em branco
+                }
+            });
+            
+            // Se não houver produtos, criar uma aba vazia
+            if (data.data.length === 0) {
+                const ws = XLSX.utils.aoa_to_sheet([['Nenhum produto encontrado']]);
+                XLSX.utils.book_append_sheet(wb, ws, "Sem Dados");
             }
             
-            // Salvar o arquivo
-            const fileName = `relatorio_${data.type}_${new Date().getTime()}.xlsx`;
-            XLSX.writeFile(wb, fileName);
+        } else {
+            // Preparar dados para requisições (mantém igual)
+            const excelData = data.data.map(requisition => ({
+                'ID Requisição': requisition.id,
+                'Status': requisition.status,
+                'Total Requisitado': requisition.totalRequested,
+                'Quantidade Finalizada': requisition.finalizedQuantity || 0,
+                'Data': this.formatDateTime(requisition.createdAt),
+                'Solicitante': requisition.createdBy,
+                'Descrição': requisition.description,
+                'Setor': requisition.local,
+                'Número de Produtos': requisition.products?.length || 0
+            }));
             
-        } catch (error) {
-            console.error('Erro ao gerar Excel:', error);
-            throw new Error('Falha ao gerar Excel');
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            XLSX.utils.book_append_sheet(wb, ws, "Requisições");
         }
+        
+        // Salvar o arquivo
+        const fileName = `relatorio_${data.type}_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        
+    } catch (error) {
+        console.error('Erro ao gerar Excel:', error);
+        throw new Error('Falha ao gerar Excel');
     }
+}
 
     logout() {
         if (confirm('Tem certeza que deseja sair do sistema?')) {
