@@ -2302,3 +2302,518 @@ form {
     font-size: 0.8rem;
     white-space: nowrap;
 }
+
+/* ===================== SISTEMA DE SELEÇÃO DE LOTES - ESTILOS ESPECÍFICOS ===================== */
+
+/* Modal de seleção de lotes */
+#loteSelectionModal .modal-content {
+    max-width: 800px;
+}
+
+.selected-product-info {
+    background: var(--bg-secondary);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-lg);
+    margin-bottom: var(--spacing-xl);
+    border-left: 4px solid var(--primary-color);
+}
+
+.selected-product-info h4 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.selected-product-info p {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* Lista de lotes disponíveis - Design melhorado */
+.available-lotes-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.available-lotes-section h4 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+    background: var(--bg-gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.available-lotes-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    background: var(--bg-primary);
+}
+
+.lote-selection-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-xl);
+    border-bottom: 1px solid var(--border-color);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.lote-selection-item:last-child {
+    border-bottom: none;
+}
+
+.lote-selection-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+    transition: var(--transition);
+}
+
+.lote-selection-item:hover::before {
+    left: 100%;
+}
+
+.lote-selection-item:hover {
+    background: var(--bg-secondary);
+    transform: translateX(5px);
+}
+
+.lote-selection-item.selected {
+    background: rgba(139, 92, 246, 0.1);
+    border-left: 4px solid var(--primary-color);
+    transform: translateX(5px);
+}
+
+.lote-selection-item.selected::before {
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.2), transparent);
+}
+
+.lote-selection-info {
+    flex: 1;
+}
+
+.lote-number {
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    margin-bottom: var(--spacing-xs);
+    background: var(--bg-gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.lote-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+}
+
+.lote-details span {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.lote-selection-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-lg);
+    min-width: 200px;
+}
+
+.quantity-selection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.quantity-selection label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lote-quantity-input {
+    width: 100px;
+    padding: var(--spacing-sm);
+    text-align: center;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 700;
+    transition: var(--transition);
+}
+
+.lote-quantity-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.lote-quantity-input:disabled {
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.lote-quantity-input:disabled:focus {
+    border-color: var(--border-color);
+    box-shadow: none;
+}
+
+.quantity-selection small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.lote-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+}
+
+.lote-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.lote-checkbox label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Resumo da seleção */
+.selection-summary {
+    background: var(--bg-secondary);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius-lg);
+    border: 2px solid var(--border-color);
+    margin-top: var(--spacing-xl);
+}
+
+.selection-summary h4 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.total-selected {
+    text-align: center;
+    padding: var(--spacing-lg);
+    background: var(--primary-light);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+    border: 2px dashed var(--primary-color);
+}
+
+.total-selected strong {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    font-weight: 800;
+}
+
+.selected-lotes-summary {
+    max-height: 200px;
+    overflow-y: auto;
+    margin: var(--spacing-lg) 0;
+}
+
+.selected-lote-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+}
+
+.selected-lote-item:hover {
+    border-color: var(--primary-color);
+    transform: translateX(2px);
+}
+
+.selected-lote-item:last-child {
+    margin-bottom: 0;
+}
+
+.selected-lote-item .lote-number {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.selected-lote-item .lote-quantity {
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--bg-gradient-primary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    color: white;
+}
+
+.selected-lote-item .expiry-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+/* Estados vazios */
+.empty-lotes-selection {
+    text-align: center;
+    padding: var(--spacing-3xl);
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-lg);
+    border: 2px dashed var(--border-color);
+}
+
+.empty-lotes-selection p {
+    margin-bottom: var(--spacing-md);
+    font-size: 1.1rem;
+}
+
+/* Botão de seleção de lotes nos produtos */
+.select-lotes-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: var(--text-white);
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--border-radius);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+}
+
+.select-lotes-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    filter: brightness(1.1);
+}
+
+/* Controles de seleção de produtos */
+.product-selection-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-md);
+    min-width: 180px;
+}
+
+.product-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* Exibição de lotes selecionados na requisição */
+.selected-lotes-display {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--primary-color);
+}
+
+.selected-lotes-display strong {
+    display: block;
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.selected-lote-mini {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm);
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-xs);
+    border: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.selected-lote-mini:last-child {
+    margin-bottom: 0;
+}
+
+.selected-lote-mini .lote-number {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.selected-lote-mini .lote-quantity {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Botão de editar lotes */
+.edit-lotes-btn {
+    background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+    color: var(--text-white);
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: var(--shadow-sm);
+    margin-top: var(--spacing-sm);
+    width: 100%;
+}
+
+.edit-lotes-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    filter: brightness(1.1);
+}
+
+/* Display de quantidade total */
+.total-quantity-display {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--primary-color);
+    text-align: center;
+    margin: var(--spacing-sm) 0;
+    background: var(--primary-light);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    border: 2px solid var(--primary-color);
+}
+
+/* Responsividade para seleção de lotes */
+@media (max-width: 768px) {
+    .lote-selection-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-lg);
+    }
+    
+    .lote-selection-controls {
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        align-items: center;
+    }
+    
+    .quantity-selection {
+        align-items: flex-start;
+    }
+    
+    .lote-details {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .selected-product-item-detailed {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .selected-product-quantity-detailed {
+        order: -1;
+    }
+    
+    .total-quantity-display {
+        font-size: 1.25rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .lote-selection-controls {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+    
+    .quantity-selection {
+        align-items: center;
+    }
+    
+    .select-lotes-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .product-selection-controls {
+        min-width: auto;
+        width: 100%;
+        align-items: stretch;
+    }
+}
+
+/* Animações específicas para seleção de lotes */
+@keyframes loteSelect {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.lote-selection-item.selected {
+    animation: loteSelect 0.3s ease-out;
+}
+
+/* Estados de loading para confirmação */
+.lote-selection-loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.lote-selection-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 1.5s infinite;
+}
