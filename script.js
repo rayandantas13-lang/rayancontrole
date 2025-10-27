@@ -423,146 +423,45 @@ groupProductsBySector(products) {
 }
 
    async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
-    // Configurações
-    const lineHeight = 12;
-    const rowHeight = 18;
-    const headerHeight = 16;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const sectorSpacing = 25;
-
-    // ========== GRÁFICO DE STATUS DE VALIDADE ==========
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('RELATÓRIO DE ESTOQUE - VISÃO GERAL', pageWidth / 2, yPosition, { align: 'center' });
+    doc.text('PRODUTOS EM ESTOQUE - ORGANIZADO POR SETOR', pageWidth / 2, yPosition, { align: 'center' });
     yPosition += 25;
-
-    // Coletar dados para gráficos
-    const expiryStats = this.calculateExpiryStats(data.data);
-    const sectorStats = this.calculateSectorStats(data.data);
-
-    // ========== MÉTRICAS RÁPIDAS ==========
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MÉTRICAS DO ESTOQUE', margin, yPosition);
-    yPosition += 15;
-
-    // Cards de métricas
-    const totalProducts = data.data.reduce((sum, sector) => sum + sector.products.length, 0);
-    const totalQuantity = data.data.reduce((sum, sector) => 
-        sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.quantity || 0), 0), 0
-    );
-    const lowStockCount = data.data.reduce((sum, sector) => 
-        sum + sector.products.filter(p => (p.quantity || 0) < 100).length, 0
-    );
-
-    // Métricas em colunas
-    const metrics = [
-        { label: 'Total de Produtos', value: this.formatNumber(totalProducts), icon: '📦' },
-        { label: 'Itens em Estoque', value: this.formatNumber(totalQuantity), icon: '📊' },
-        { label: 'Estoque Baixo', value: this.formatNumber(lowStockCount), icon: '⚠️' },
-        { label: 'Setores', value: this.formatNumber(data.data.length), icon: '📍' }
-    ];
-
-    const colWidth = (pageWidth - 2 * margin) / 4;
-    metrics.forEach((metric, index) => {
-        const x = margin + (index * colWidth);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(metric.icon, x + 5, yPosition);
-        doc.setFont('helvetica', 'bold');
-        doc.text(metric.value, x + 15, yPosition);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text(metric.label, x, yPosition + 6, { maxWidth: colWidth - 5, align: 'center' });
-    });
-
-    yPosition += 25;
-
-    // ========== GRÁFICO DE STATUS DE VALIDADE ==========
-    if (yPosition > pageHeight - 150) {
-        doc.addPage();
-        yPosition = margin;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('STATUS DE VALIDADE', margin, yPosition);
-    yPosition += 10;
-
-    // Desenhar gráfico de pizza simplificado
-    this.drawExpiryChart(doc, expiryStats, margin, yPosition, 80);
-    yPosition += 90;
-
-    // Legenda do gráfico
-    doc.setFontSize(9);
-    const legendItems = [
-        { color: [34, 197, 94], label: `Conforme (${expiryStats.conforme})`, value: expiryStats.conforme },
-        { color: [234, 179, 8], label: `Atenção (${expiryStats.atencao})`, value: expiryStats.atencao },
-        { color: [239, 68, 68], label: `Vencido (${expiryStats.vencido})`, value: expiryStats.vencido },
-        { color: [156, 163, 175], label: `Sem Data (${expiryStats.semData})`, value: expiryStats.semData }
-    ];
-
-    legendItems.forEach((item, index) => {
-        const y = yPosition + (index * 8);
-        doc.setFillColor(...item.color);
-        doc.rect(margin + 5, y - 3, 4, 4, 'F');
-        doc.setTextColor(0, 0, 0);
-        doc.text(item.label, margin + 12, y);
-    });
-
-    yPosition += 40;
-
-    // ========== GRÁFICO DE SETORES ==========
-    if (yPosition > pageHeight - 120) {
-        doc.addPage();
-        yPosition = margin;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DISTRIBUIÇÃO POR SETOR', margin, yPosition);
-    yPosition += 10;
-
-    // Gráfico de barras para setores
-    this.drawSectorBars(doc, sectorStats, margin, yPosition, pageWidth - 2 * margin, 60);
-    yPosition += 80;
-
-    // ========== LISTA DETALHADA POR SETOR ==========
-    if (yPosition > pageHeight - 100) {
-        doc.addPage();
-        yPosition = margin;
-    }
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DETALHAMENTO POR SETOR', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 25;
-
-    // Resto do código original para lista detalhada...
+    
     if (data.data.length === 0) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'normal');
         doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
         return;
     }
-
-    // ... (mantenha o código original da lista detalhada aqui)
+    
+    // Configurações de layout melhoradas
+    const lineHeight = 12;
+    const rowHeight = 18;
+    const headerHeight = 16;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const sectorSpacing = 25; // Espaço entre setores
+    
+    // PERCORRER CADA SETOR
     data.data.forEach((sectorData, sectorIndex) => {
+        // Verificar se precisa de nova página antes de começar um novo setor
         if (yPosition > pageHeight - 100) {
             doc.addPage();
             yPosition = margin;
         }
-
-        // Cabeçalho do setor
-        doc.setFillColor(79, 70, 229);
+        
+        // ========== CABEÇALHO DO SETOR ==========
+        doc.setFillColor(79, 70, 229); // Azul escuro para setores
         doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
+        
         doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()}`, margin + 10, yPosition + 12);
+        
         yPosition += 25;
-
-        // Tabela de produtos (código original)
+        
+        // ========== CABEÇALHO DA TABELA DO SETOR ==========
         if (sectorData.products.length > 0) {
             doc.setFillColor(200, 200, 200);
             doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
@@ -579,16 +478,17 @@ groupProductsBySector(products) {
             
             yPosition += headerHeight + 5;
             
-            // Produtos do setor
+            // ========== PRODUTOS DO SETOR ==========
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             
             sectorData.products.forEach((product, productIndex) => {
+                // Verificar se precisa de nova página
                 if (yPosition + rowHeight > pageHeight - margin) {
                     doc.addPage();
                     yPosition = margin;
                     
-                    // Redesenhar cabeçalho
+                    // Redesenhar cabeçalho do setor na nova página
                     doc.setFillColor(79, 70, 229);
                     doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
                     doc.setTextColor(255, 255, 255);
@@ -597,6 +497,7 @@ groupProductsBySector(products) {
                     doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()} (Continuação)`, margin + 10, yPosition + 12);
                     yPosition += 25;
                     
+                    // Redesenhar cabeçalho da tabela
                     doc.setFillColor(200, 200, 200);
                     doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
                     doc.setTextColor(0, 0, 0);
@@ -614,9 +515,11 @@ groupProductsBySector(products) {
                     doc.setFontSize(9);
                 }
                 
+                // Texto com posicionamento vertical melhorado
                 const textY = yPosition + 8;
                 doc.text(product.code || '-', margin + 5, textY);
                 
+                // Quebrar texto longo do nome em múltiplas linhas
                 const productName = product.name || '-';
                 const maxNameWidth = colWidth - 10;
                 const nameLines = doc.splitTextToSize(productName, maxNameWidth);
@@ -632,11 +535,12 @@ groupProductsBySector(products) {
                 doc.text(product.expiryStatus?.label || '-', margin + 3 * colWidth + 5, textY);
                 doc.text(product.lastUpdated || '-', margin + 4 * colWidth + 5, textY);
                 
+                // Ajustar altura baseado no número de linhas do nome
                 const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
                 yPosition += actualRowHeight;
             });
             
-            // Resumo do setor
+            // ========== RESUMO DO SETOR ==========
             yPosition += 10;
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(10);
@@ -646,6 +550,29 @@ groupProductsBySector(products) {
             yPosition += sectorSpacing;
         }
     });
+    
+    // ========== RESUMO GERAL ==========
+    if (yPosition > pageHeight - 30) {
+        doc.addPage();
+        yPosition = margin;
+    }
+    
+    yPosition += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    
+    const totalProducts = data.data.reduce((sum, sector) => sum + sector.products.length, 0);
+    const totalQuantity = data.data.reduce((sum, sector) => 
+        sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.quantity || 0), 0), 0
+    );
+    
+    doc.text(`RESUMO GERAL:`, margin, yPosition);
+    yPosition += 12;
+    doc.text(`• ${this.formatNumber(data.data.length)} Setores`, margin + 10, yPosition);
+    yPosition += 10;
+    doc.text(`• ${this.formatNumber(totalProducts)} Produtos`, margin + 10, yPosition);
+    yPosition += 10;
+    doc.text(`• ${this.formatNumber(totalQuantity)} Itens em Estoque`, margin + 10, yPosition);
 }
 
 async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
@@ -2977,131 +2904,7 @@ editProductLotes(productId) {
     if (product) {
         this.openLoteSelectionModal(product);
     }
-}
-
-// ===================== MÉTODOS AUXILIARES PARA GRÁFICOS =====================
-
-calculateExpiryStats(sectorData) {
-    const stats = {
-        conforme: 0,
-        atencao: 0,
-        vencido: 0,
-        semData: 0
-    };
-    
-    sectorData.forEach(sector => {
-        sector.products.forEach(product => {
-            const status = product.expiryStatus?.status || 'semData';
-            switch (status) {
-                case 'conforme': stats.conforme++; break;
-                case 'atencao': stats.atencao++; break;
-                case 'vencido': stats.vencido++; break;
-                default: stats.semData++; break;
-            }
-        });
-    });
-    
-    return stats;
-}
-
-calculateSectorStats(sectorData) {
-    return sectorData.map(sector => ({
-        name: sector.sectorName,
-        count: sector.products.length,
-        quantity: sector.products.reduce((sum, product) => sum + (product.quantity || 0), 0)
-    })).sort((a, b) => b.count - a.count).slice(0, 8); // Top 8 setores
-}
-
-drawExpiryChart(doc, stats, x, y, size) {
-    const centerX = x + (size / 2);
-    const centerY = y + (size / 2);
-    const radius = size / 3;
-    
-    // Calcular totais e ângulos
-    const total = stats.conforme + stats.atencao + stats.vencido + stats.semData;
-    if (total === 0) return;
-    
-    const angles = {
-        conforme: (stats.conforme / total) * 360,
-        atencao: (stats.atencao / total) * 360,
-        vencido: (stats.vencido / total) * 360,
-        semData: (stats.semData / total) * 360
-    };
-    
-    // Cores para os segmentos
-    const colors = {
-        conforme: [34, 197, 94],   // Verde
-        atencao: [234, 179, 8],    // Amarelo
-        vencido: [239, 68, 68],    // Vermelho
-        semData: [156, 163, 175]   // Cinza
-    };
-    
-    // Desenhar pizza
-    let startAngle = 0;
-    for (const [key, angle] of Object.entries(angles)) {
-        if (angle > 0) {
-            doc.setFillColor(...colors[key]);
-            this.drawPieSegment(doc, centerX, centerY, radius, startAngle, startAngle + angle);
-            startAngle += angle;
-        }
-    }
-    
-    // Centro branco
-    doc.setFillColor(255, 255, 255);
-    doc.circle(centerX, centerY, radius * 0.4, 'F');
-}
-
-drawPieSegment(doc, centerX, centerY, radius, startAngle, endAngle) {
-    const segments = 30;
-    const angleStep = (endAngle - startAngle) / segments;
-    
-    doc.setLineWidth(0.5);
-    
-    for (let i = 0; i <= segments; i++) {
-        const angle = startAngle + (i * angleStep);
-        const x1 = centerX;
-        const y1 = centerY;
-        const x2 = centerX + radius * Math.cos(angle * Math.PI / 180);
-        const y2 = centerY + radius * Math.sin(angle * Math.PI / 180);
-        
-        doc.line(x1, y1, x2, y2);
-    }
-}
-
-drawSectorBars(doc, sectorStats, x, y, width, height) {
-    if (!sectorStats.length) return;
-    
-    const maxCount = Math.max(...sectorStats.map(s => s.count));
-    const barWidth = (width - 20) / sectorStats.length;
-    const maxBarHeight = height - 20;
-    
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    
-    sectorStats.forEach((sector, index) => {
-        const barX = x + 10 + (index * barWidth);
-        const barHeight = (sector.count / maxCount) * maxBarHeight;
-        const barY = y + maxBarHeight - barHeight + 10;
-        
-        // Barra
-        doc.setFillColor(79, 70, 229);
-        doc.rect(barX, barY, barWidth - 2, barHeight, 'F');
-        
-        // Valor
-        doc.setTextColor(0, 0, 0);
-        doc.text(sector.count.toString(), barX + (barWidth / 2) - 2, barY - 2, { align: 'center' });
-        
-        // Label (rotacionado se necessário)
-        const sectorName = sector.name.length > 8 ? sector.name.substring(0, 8) + '...' : sector.name;
-        doc.text(sectorName, barX + (barWidth / 2) - 2, y + height - 5, { align: 'center' });
-    });
-    
-    // Eixo Y
-    doc.setLineWidth(0.2);
-    doc.line(x + 5, y + 10, x + 5, y + height - 10);
-    doc.line(x + 5, y + height - 10, x + width - 5, y + height - 10);
-}
-  
+}  
 }
 // Inicializar o sistema quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
