@@ -2887,7 +2887,7 @@ editProductLotes(productId) {
         this.openLoteSelectionModal(product);
     }
 }
-
+}
 // Inicializar o sistema quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
     window.inventorySystem = new InventorySystem();
