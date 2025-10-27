@@ -2817,3 +2817,46 @@ form {
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
     animation: shimmer 1.5s infinite;
 }
+
+/* ===================== CORREÇÃO DE VISIBILIDADE DAS ABAS ===================== */
+
+/* Garantir que a aba products fique visível */
+#productsTab.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+}
+
+/* Remover display: none das abas ativas */
+.tab-content.active {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Forçar visibilidade da lista de produtos */
+#productsList {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Remover qualquer escondimento das abas */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Garantir que o container principal não esteja escondido */
+#mainApp {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Correção específica para o sistema de abas */
+[data-tab].active {
+    background-color: #4f46e5 !important;
+    color: white !important;
+}
