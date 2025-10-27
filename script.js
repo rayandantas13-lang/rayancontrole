@@ -2617,6 +2617,8 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
 currentProductForLoteSelection = null;
 selectedLotesForRequisition = [];
 
+// ===================== SISTEMA DE SELEÇÃO DE LOTES =====================
+
 // Método para abrir a seleção de lotes
 openLoteSelectionModal(product) {
     console.log('Abrindo modal de lotes para:', product.name);
@@ -2826,7 +2828,7 @@ updateLoteSelectionSummary() {
 
 // Confirmar seleção de lotes
 confirmLoteSelection() {
-  console.log('confirmLoteSelection chamado');
+    console.log('confirmLoteSelection chamado');
     
     const totalSelected = this.selectedLotesForRequisition.reduce(
         (sum, selected) => sum + selected.quantity, 0
@@ -2876,7 +2878,8 @@ closeLoteSelectionModal() {
     
     this.currentProductForLoteSelection = null;
     this.selectedLotesForRequisition = [];
-}  
+}
+
 // Método para editar lotes de um produto já selecionado
 editProductLotes(productId) {
     const product = this.products.find(p => p.id === productId);
