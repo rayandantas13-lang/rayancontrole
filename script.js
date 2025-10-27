@@ -2109,61 +2109,60 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
     }
 
     updateSelectedProductsDisplay() {
-        const selectedProductsDiv = document.getElementById("selectedProducts");
-        if (selectedProductsDiv) {
-            if (this.selectedProductsForRequisition.length === 0) {
-                selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
-            } else {
-                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => {
-                    const expiryStatus = this.getExpiryStatus(item.expiry);
-                    return `
-                        <div class="selected-product-item-detailed">
-                            <div class="selected-product-info-detailed">
-                                <div class="selected-product-name-detailed">${this.escapeHtml(item.name)}</div>
-                                <div class="selected-product-details">
-                                    <div>Código: ${this.escapeHtml(item.code)}</div>
-                                    <div>Setor: ${this.escapeHtml(item.local)}</div>
-                                    <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
-                                    <div>Status Validade: 
-                                        <span class="expiry-status ${expiryStatus.class}">
-                                            ${expiryStatus.label}
-                                        </span>
-                                    </div>
+    const selectedProductsDiv = document.getElementById("selectedProducts");
+    if (selectedProductsDiv) {
+        if (this.selectedProductsForRequisition.length === 0) {
+            selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
+        } else {
+            selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => {
+                const expiryStatus = this.getExpiryStatus(item.expiry);
+                
+                // Calcular quantidade total dos lotes selecionados
+                const totalRequested = item.selectedLotes ? 
+                    item.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0) : 
+                    item.requestedQuantity || 0;
+                
+                return `
+                    <div class="selected-product-item-detailed">
+                        <div class="selected-product-info-detailed">
+                            <div class="selected-product-name-detailed">${this.escapeHtml(item.name)}</div>
+                            <div class="selected-product-details">
+                                <div>Código: ${this.escapeHtml(item.code)}</div>
+                                <div>Setor: ${this.escapeHtml(item.local)}</div>
+                                <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
+                                <div>Status Validade: 
+                                    <span class="expiry-status ${expiryStatus.class}">
+                                        ${expiryStatus.label}
+                                    </span>
                                 </div>
+                                ${item.selectedLotes && item.selectedLotes.length > 0 ? `
+                                <div class="selected-lotes-display">
+                                    <strong>Lotes Selecionados:</strong>
+                                    ${item.selectedLotes.map(lote => `
+                                        <div class="selected-lote-mini">
+                                            <span>Lote ${lote.loteNumber}: ${this.formatNumber(lote.quantity)} un.</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
                             </div>
-                            <div class="selected-product-quantity-detailed">
-                                <div class="quantity-label">Quantidade a Requisitar</div>
-                                <input type="number" 
-                                       class="quantity-input-detailed" 
-                                       value="${item.requestedQuantity || 1}" 
-                                       min="1" 
-                                       max="${item.availableQuantity}"
-                                       data-product-id="${item.id}">
-                                <small class="stock-info">Máx: ${this.formatNumber(item.availableQuantity)}</small>
-                            </div>
-                            <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${item.id}')">Remover</button>
                         </div>
-                    `;
-                }).join('');
-
-                selectedProductsDiv.querySelectorAll('.quantity-input-detailed').forEach(input => {
-                    input.addEventListener('change', (e) => {
-                        const productId = e.target.dataset.productId;
-                        const quantity = parseInt(e.target.value);
-                        const maxQuantity = parseInt(e.target.max);
-                        
-                        if (quantity > maxQuantity) {
-                            alert(`Quantidade não pode exceder o estoque disponível: ${this.formatNumber(maxQuantity)}`);
-                            e.target.value = maxQuantity;
-                            this.updateProductQuantity(productId, maxQuantity);
-                        } else {
-                            this.updateProductQuantity(productId, quantity);
-                        }
-                    });
-                });
-            }
+                        <div class="selected-product-quantity-detailed">
+                            <div class="quantity-label">Quantidade Total</div>
+                            <div class="total-quantity-display">${this.formatNumber(totalRequested)}</div>
+                            <small class="stock-info">Máx: ${this.formatNumber(item.availableQuantity)}</small>
+                            <button type="button" class="btn-secondary edit-lotes-btn" 
+                                    onclick="window.inventorySystem.editProductLotes('${item.id}')">
+                                Editar Lotes
+                            </button>
+                        </div>
+                        <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${item.id}')">Remover</button>
+                    </div>
+                `;
+            }).join('');
         }
     }
+}
 
     updateProductQuantity(productId, quantity) {
         const productIndex = this.selectedProductsForRequisition.findIndex(p => p.id === productId);
@@ -2877,8 +2876,13 @@ closeLoteSelectionModal() {
     
     this.currentProductForLoteSelection = null;
     this.selectedLotesForRequisition = [];
-}
-  
+}  
+// Método para editar lotes de um produto já selecionado
+editProductLotes(productId) {
+    const product = this.products.find(p => p.id === productId);
+    if (product) {
+        this.openLoteSelectionModal(product);
+    }
 }
 
 // Inicializar o sistema quando a página carregar
