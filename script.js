@@ -43,10 +43,15 @@ class InventorySystem {
     this.init();
 }
 
-    async init() {
-        this.setupEventListeners();
-        await this.setupAuthListener();
-    }
+   async init() {
+    this.setupEventListeners();
+    
+    // ⚠️ CARREGAR PRODUTOS MESMO SEM LOGIN
+    await this.loadFromFirestore();
+    await this.loadRequisitionsFromFirestore();
+    
+    await this.setupAuthListener();
+}
 
     // ===================== SISTEMA DE RELATÓRIOS =====================
     
@@ -955,18 +960,22 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
 
     // ===================== Firestore Operations =====================
     async loadFromFirestore() {
-        try {
-            const productsCol = collection(db, "products");
-            const productSnapshot = await getDocs(productsCol);
-            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Produtos carregados do Firestore:", this.products.length, "produtos.", this.products);
-            if (this.products.length === 0) {
-                console.warn("Nenhum produto encontrado no Firestore. Verifique sua coleção 'products'.");
-            }
-        } catch (error) {
-            console.error("Erro ao carregar dados do Firestore:", error);
-        }
+    try {
+        const productsCol = collection(db, "products");
+        const productSnapshot = await getDocs(productsCol);
+        this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("✅ Produtos carregados:", this.products.length, "produtos");
+        
+        // ⚠️ ADICIONE ESTAS LINhas PARA FORÇAR O RENDER:
+        this.render();
+        this.updateStats();
+        this.updateDashboard();
+        this.populateLocationFilter();
+        
+    } catch (error) {
+        console.error("❌ Erro ao carregar dados:", error);
     }
+}
 
     async loadRequisitionsFromFirestore() {
         try {
@@ -2890,5 +2899,9 @@ editProductLotes(productId) {
 }
 // Inicializar o sistema quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
-    window.inventorySystem = new InventorySystem();
+    // Dar tempo para o DOM carregar completamente
+    setTimeout(() => {
+        window.inventorySystem = new InventorySystem();
+        console.log("✅ Sistema de inventário inicializado");
+    }, 500);
 });
