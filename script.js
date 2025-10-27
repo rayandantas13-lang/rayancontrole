@@ -2089,33 +2089,42 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
     }
 
     confirmProductSelection() {
-        const selectedCheckboxes = document.querySelectorAll('#availableProductsList .product-checkbox:checked');
-        this.selectedProductsForRequisition = [];
+    console.log('✅ confirmProductSelection chamado');
+    
+    const selectedCheckboxes = document.querySelectorAll('#availableProductsList .product-checkbox:checked');
+    console.log('Checkboxes selecionados:', selectedCheckboxes.length);
+    
+    this.selectedProductsForRequisition = [];
+    
+    selectedCheckboxes.forEach(checkbox => {
+        const productId = checkbox.value;
+        const productItem = checkbox.closest('.available-product-item');
+        const product = this.products.find(p => p.id === productId);
         
-        selectedCheckboxes.forEach(checkbox => {
-            const productId = checkbox.value;
-            const productItem = checkbox.closest('.available-product-item');
+        console.log('Processando produto:', productId, product);
+        
+        if (product) {
+            // Obter quantidade do input (se existir)
             const quantityInput = productItem.querySelector('.request-quantity-input');
-            const product = this.products.find(p => p.id === productId);
+            const requestedQuantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
             
-            if (product && quantityInput) {
-                const requestedQuantity = parseInt(quantityInput.value) || 1;
-                
-                this.selectedProductsForRequisition.push({
-                    id: product.id,
-                    name: product.name,
-                    code: product.code,
-                    local: product.local,
-                    availableQuantity: product.quantity,
-                    requestedQuantity: requestedQuantity,
-                    expiry: product.expiry
-                });
-            }
-        });
+            this.selectedProductsForRequisition.push({
+                id: product.id,
+                name: product.name,
+                code: product.code,
+                local: product.local,
+                availableQuantity: product.quantity,
+                requestedQuantity: requestedQuantity,
+                expiry: product.expiry,
+                selectedLotes: [] // Inicializar array vazio de lotes
+            });
+        }
+    });
 
-        this.updateSelectedProductsDisplay();
-        this.closeProductSelectionModal();
-    }
+    console.log('Produtos selecionados FINAL:', this.selectedProductsForRequisition);
+    this.updateSelectedProductsDisplay();
+    this.closeProductSelectionModal();
+}
 
     updateSelectedProductsDisplay() {
     const selectedProductsDiv = document.getElementById("selectedProducts");
