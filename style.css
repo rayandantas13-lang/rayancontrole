@@ -108,6 +108,55 @@
     100% { transform: rotate(360deg); }
 }
 
+@keyframes dateHighlight {
+    0% {
+        background-color: rgba(139, 92, 246, 0.1);
+        transform: scale(1);
+    }
+    50% {
+        background-color: rgba(139, 92, 246, 0.3);
+        transform: scale(1.02);
+    }
+    100% {
+        background-color: rgba(139, 92, 246, 0.1);
+        transform: scale(1);
+    }
+}
+
+@keyframes slideInDate {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes datePulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+@keyframes loteSelect {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     line-height: 1.6;
@@ -643,6 +692,41 @@ header p {
     font-weight: 700;
 }
 
+/* ===================== ESTILOS PARA DATA DE LANÇAMENTO ===================== */
+
+/* Estilo para a data de lançamento nos produtos */
+.product-detail .launch-date {
+    font-weight: 700;
+    color: var(--primary-color);
+    background: rgba(139, 92, 246, 0.1);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    text-align: center;
+    animation: slideInDate 0.5s ease-out;
+}
+
+.product-item .launch-date-badge {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    background: rgba(139, 92, 246, 0.2);
+    color: var(--primary-color);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    z-index: 2;
+    transition: var(--transition);
+}
+
+.product-item:hover .launch-date-badge {
+    background: rgba(139, 92, 246, 0.3) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
 /* Badges de quantidade - Design mais atrativo */
 .quantity-badge {
     display: inline-flex;
@@ -846,6 +930,46 @@ form {
     padding-top: var(--spacing-xl);
     border-top: 2px solid var(--border-color);
     margin-top: var(--spacing-xl);
+}
+
+/* ===================== ESTILOS PARA CAMPO DE DATA DE CRIAÇÃO ===================== */
+
+.form-group.date-readonly label::after {
+    content: " (Automática)";
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.form-group.date-field {
+    position: relative;
+}
+
+.form-group.date-field::after {
+    content: '📅';
+    position: absolute;
+    right: var(--spacing-lg);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+    pointer-events: none;
+}
+
+.form-group.date-field input[type="date"] {
+    padding-right: var(--spacing-2xl);
+}
+
+#loteCreation {
+    background: var(--bg-secondary) !important;
+    color: var(--text-muted) !important;
+    border: 2px solid var(--border-color) !important;
+    cursor: not-allowed !important;
+    opacity: 0.8 !important;
+}
+
+#loteCreation:focus {
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
 }
 
 /* Seleção de produtos - Design melhorado */
@@ -1531,6 +1655,36 @@ form {
     font-size: 0.9rem;
 }
 
+/* ===================== ESTILOS PARA DATAS DE CRIAÇÃO DE LOTES ===================== */
+
+.lote-dates {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    align-items: center;
+    text-align: center;
+}
+
+.lote-creation-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    animation: slideInDate 0.5s ease-out;
+}
+
+.lote-creation-date small {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.lote-creation-date.highlight {
+    animation: dateHighlight 1s ease-in-out;
+}
+
 .lote-expiry {
     display: flex;
     flex-direction: column;
@@ -1606,10 +1760,11 @@ form {
 
 .lote-badge {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: rgba(15, 52, 96, 0.3);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md);
+    background: rgba(15, 52, 96, 0.4);
     backdrop-filter: blur(10px);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
@@ -1618,6 +1773,8 @@ form {
     transition: var(--transition);
     position: relative;
     overflow: hidden;
+    min-width: 140px;
+    text-align: center;
     animation: loteAppear 0.2s ease-out;
 }
 
@@ -1645,11 +1802,39 @@ form {
 .lote-badge .lote-number {
     color: var(--primary-color);
     font-weight: 700;
+    font-size: 0.9rem;
 }
 
 .lote-badge .lote-quantity {
     color: var(--text-secondary);
     font-weight: 600;
+    background: var(--bg-gradient-primary);
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: 9999px;
+    font-size: 0.8rem;
+}
+
+.lote-badge .lote-creation {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: rgba(148, 163, 184, 0.2);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.lote-badge small {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.lote-badge:hover .lote-creation {
+    background: rgba(139, 92, 246, 0.2) !important;
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
 }
 
 .expiry-badge {
@@ -1945,362 +2130,251 @@ form {
     font-size: 0.9rem;
 }
 
-/* Responsividade para o menu e modal de relatório */
-@media (max-width: 768px) {
-    .menu-container {
-        position: static;
-        justify-content: flex-end;
-        margin-bottom: var(--spacing-lg);
-    }
-    
-    .dropdown-content {
-        right: 0;
-        left: auto;
-    }
-    
-    .report-options {
-        grid-template-columns: 1fr;
-    }
-    
-    .period-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .custom-period {
-        grid-template-columns: 1fr;
-    }
-    
-    .format-options {
-        flex-direction: column;
-    }
-}
+/* ===================== ESTILOS PARA INFORMAÇÕES DE DATA NO RELATÓRIO ===================== */
 
-@media (max-width: 480px) {
-    .menu-btn {
-        padding: var(--spacing-sm);
-    }
-    
-    .menu-btn span {
-        display: none;
-    }
-    
-    .dropdown-content {
-        min-width: 150px;
-    }
-    
-    .report-modal .modal-content {
-        margin: var(--spacing-sm);
-        width: calc(100% - var(--spacing-sm) * 2);
-    }
-    
-    .report-option {
-        padding: var(--spacing-lg);
-    }
-    
-    .period-option {
-        padding: var(--spacing-md);
-        font-size: 0.9rem;
-    }
-    
-    .format-option {
-        padding: var(--spacing-md);
-    }
-}
-
-/* Responsividade para lotes */
-@media (max-width: 768px) {
-    .lote-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .lote-header h4 {
-        font-size: 1.1rem;
-    }
-    
-    .lote-item {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-        text-align: center;
-    }
-    
-    .lote-actions {
-        justify-content: center;
-        margin-top: var(--spacing-md);
-    }
-    
-    .lote-badge {
-        flex: 1;
-        min-width: 150px;
-        justify-content: center;
-    }
-    
-    .lote-summary {
-        justify-content: center;
-    }
-
-    .selected-product-item-detailed {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-        text-align: center;
-    }
-    
-    .selected-product-stock,
-    .selected-product-quantity-detailed {
-        flex-direction: row;
-        justify-content: space-between;
-    }
-
-    .expiry-status-chart {
-        gap: var(--spacing-md);
-    }
-    
-    .expiry-status-item {
-        padding: var(--spacing-md);
-        gap: var(--spacing-md);
-    }
-    
-    .expiry-status-icon {
-        font-size: 1.5rem;
-        width: 40px;
-        height: 40px;
-    }
-    
-    .expiry-status-count {
-        font-size: 1.5rem;
-    }
-
-    .requisition-product-details {
-        flex-direction: column;
-        gap: var(--spacing-xs);
-    }
-    
-    .requisition-meta {
-        align-items: flex-start;
-        margin-top: var(--spacing-sm);
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: var(--spacing-sm);
-    }
-    
-    .products-section, .requisitions-section, .user-list-section, .dashboard-section {
-        padding: var(--spacing-xl);
-    }
-    
-    .product-item, .requisition-item, .user-item {
-        padding: var(--spacing-lg);
-    }
-    
-    .modal-content {
-        width: 98%;
-        margin: var(--spacing-xs);
-    }
-    
-    .login-container {
-        padding: var(--spacing-2xl);
-    }
-
-    .lote-section {
-        padding: var(--spacing-lg);
-    }
-    
-    .lote-item {
-        padding: var(--spacing-md);
-    }
-    
-    .lote-badge {
-        flex-direction: column;
-        gap: var(--spacing-xs);
-        text-align: center;
-    }
-}
-
-/* Estados de foco e hover melhorados */
-.lote-section:focus-within {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
-}
-
-.lote-item:focus-within {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
-}
-
-/* Scrollbar personalizada para lista de lotes */
-.lote-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.lote-list::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-    border-radius: var(--border-radius);
-}
-
-.lote-list::-webkit-scrollbar-thumb {
-    background: var(--primary-color);
-    border-radius: var(--border-radius);
-}
-
-.lote-list::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-hover);
-}
-
-/* Melhorias de acessibilidade */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-/* Modo escuro (preparação futura) */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-primary: #1e293b;
-        --bg-secondary: #334155;
-        --bg-tertiary: #475569;
-        --bg-card: #1e293b;
-        --text-primary: #f1f5f9;
-        --text-secondary: #cbd5e1;
-        --text-muted: #94a3b8;
-        --border-color: #475569;
-    }
-}
-
-/* Scrollbar personalizada */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-    border-radius: var(--border-radius);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--primary-color);
-    border-radius: var(--border-radius);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-hover);
-}
-
-/* Estilos para seleção de lotes */
-.lote-selection-section {
-    margin-top: var(--spacing-xl);
-}
-
-.available-lotes-list {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    margin-bottom: var(--spacing-lg);
-}
-
-.lote-selection-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--spacing-lg);
-    border-bottom: 1px solid var(--border-color);
-    transition: var(--transition);
-}
-
-.lote-selection-item:hover {
-    background: var(--bg-secondary);
-}
-
-.lote-selection-item.selected {
+.report-date-info {
     background: rgba(139, 92, 246, 0.1);
-    border-left: 4px solid var(--primary-color);
-}
-
-.lote-selection-info {
-    flex: 1;
-}
-
-.lote-selection-controls {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--spacing-sm);
-}
-
-.quantity-selection {
-    text-align: center;
-}
-
-.quantity-selection label {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-}
-
-.lote-quantity-input {
-    width: 80px;
-    padding: var(--spacing-sm);
-    text-align: center;
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: var(--border-radius);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-}
-
-.lote-checkbox {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.selection-summary {
-    background: var(--bg-secondary);
-    padding: var(--spacing-lg);
-    border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
-}
-
-.selected-lotes-summary {
-    max-height: 150px;
-    overflow-y: auto;
+    padding: var(--spacing-md);
     margin: var(--spacing-md) 0;
 }
 
-.selected-lote-item {
-    display: flex;
-    justify-content: space-between;
+.report-date-info .date-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.report-date-info .date-value {
+    font-size: 1rem;
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-top: var(--spacing-xs);
+}
+
+/* ===================== ESTILOS PARA RESUMO DE DATAS ===================== */
+
+.date-summary {
+    background: var(--bg-secondary);
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius-lg);
+    border: 2px solid var(--border-color);
+    margin: var(--spacing-lg) 0;
+}
+
+.date-summary h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+}
+
+.date-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.date-summary-item {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.date-summary-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.date-summary-value {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--primary-color);
+}
+
+/* ===================== BADGES DE STATUS TEMPORAL ===================== */
+
+.temporal-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.temporal-status.recent {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success-color);
+    border: 1px solid var(--success-color);
+}
+
+.temporal-status.old {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning-color);
+    border: 1px solid var(--warning-color);
+}
+
+.temporal-status.very-old {
+    background: rgba(244, 63, 94, 0.2);
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+}
+
+/* ===================== TOOLTIPS PARA DATAS ===================== */
+
+[data-date-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+[data-date-tooltip]::before {
+    content: attr(data-date-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    z-index: 1000;
+}
+
+[data-date-tooltip]:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-5px);
+}
+
+/* ===================== ANIMAÇÕES DE CARREGAMENTO PARA DATAS ===================== */
+
+.date-loading {
+    background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+    border-radius: var(--border-radius);
+    min-height: 20px;
+}
+
+.date-pulse {
+    animation: datePulse 2s ease-in-out infinite;
+}
+
+/* ===================== ESTILOS PARA DETALHES DE LOTES NO RELATÓRIO ===================== */
+
+.lote-details-report {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border-left: 4px solid var(--primary-color);
+}
+
+.lote-details-report h5 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lote-detail-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: var(--spacing-md);
     align-items: center;
     padding: var(--spacing-sm);
     background: var(--bg-primary);
     border-radius: var(--border-radius);
     margin-bottom: var(--spacing-xs);
+    border: 1px solid var(--border-color);
+    font-size: 0.85rem;
 }
 
-.total-selected {
-    text-align: center;
-    padding: var(--spacing-md);
-    background: var(--primary-light);
-    border-radius: var(--border-radius);
-    color: var(--primary-color);
+.lote-detail-item:last-child {
+    margin-bottom: 0;
+}
+
+.lote-detail-number {
     font-weight: 700;
+    color: var(--primary-color);
 }
 
-.product-info-header {
+.lote-detail-quantity {
+    font-weight: 700;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.lote-detail-creation {
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: center;
+}
+
+.lote-detail-expiry {
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: right;
+}
+
+/* ===================== ESTILOS PARA TABELA DE RELATÓRIO ===================== */
+
+.report-table-dates {
+    border-collapse: collapse;
+    width: 100%;
+    margin: var(--spacing-lg) 0;
+}
+
+.report-table-dates th {
+    background: var(--bg-gradient-primary);
+    color: var(--text-white);
+    padding: var(--spacing-md);
+    text-align: left;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.report-table-dates td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
-    padding: var(--spacing-lg);
-    border-radius: var(--border-radius);
-    margin-bottom: var(--spacing-lg);
-    border-left: 4px solid var(--primary-color);
 }
 
-.select-lotes-btn {
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: 0.8rem;
-    white-space: nowrap;
+.report-table-dates tr:hover td {
+    background: var(--bg-tertiary);
+}
+
+.report-table-dates .date-column {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.report-table-dates .lote-column {
+    color: var(--text-primary);
+    font-weight: 700;
 }
 
 /* ===================== SISTEMA DE SELEÇÃO DE LOTES - ESTILOS ESPECÍFICOS ===================== */
@@ -2393,6 +2467,7 @@ form {
     background: rgba(139, 92, 246, 0.1);
     border-left: 4px solid var(--primary-color);
     transform: translateX(5px);
+    animation: loteSelect 0.3s ease-out;
 }
 
 .lote-selection-item.selected::before {
@@ -2581,6 +2656,12 @@ form {
     color: white;
 }
 
+.selected-lote-item .lote-creation {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
 .selected-lote-item .expiry-date {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -2722,8 +2803,58 @@ form {
     border: 2px solid var(--primary-color);
 }
 
-/* Responsividade para seleção de lotes */
+/* ===================== RESPONSIVIDADE ===================== */
+
 @media (max-width: 768px) {
+    .menu-container {
+        position: static;
+        justify-content: flex-end;
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .dropdown-content {
+        right: 0;
+        left: auto;
+    }
+    
+    .report-options {
+        grid-template-columns: 1fr;
+    }
+    
+    .period-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .custom-period {
+        grid-template-columns: 1fr;
+    }
+    
+    .format-options {
+        flex-direction: column;
+    }
+
+    .lote-dates {
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .lote-badge {
+        min-width: 120px;
+        padding: var(--spacing-sm);
+    }
+    
+    .lote-detail-item {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-sm);
+        text-align: center;
+    }
+    
+    .lote-detail-creation,
+    .lote-detail-expiry {
+        text-align: center;
+    }
+
     .lote-selection-item {
         flex-direction: column;
         align-items: flex-start;
@@ -2758,9 +2889,122 @@ form {
     .total-quantity-display {
         font-size: 1.25rem;
     }
+
+    .expiry-status-chart {
+        gap: var(--spacing-md);
+    }
+    
+    .expiry-status-item {
+        padding: var(--spacing-md);
+        gap: var(--spacing-md);
+    }
+    
+    .expiry-status-icon {
+        font-size: 1.5rem;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .expiry-status-count {
+        font-size: 1.5rem;
+    }
+
+    .requisition-product-details {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+    
+    .requisition-meta {
+        align-items: flex-start;
+        margin-top: var(--spacing-sm);
+    }
 }
 
 @media (max-width: 480px) {
+    .menu-btn {
+        padding: var(--spacing-sm);
+    }
+    
+    .menu-btn span {
+        display: none;
+    }
+    
+    .dropdown-content {
+        min-width: 150px;
+    }
+    
+    .report-modal .modal-content {
+        margin: var(--spacing-sm);
+        width: calc(100% - var(--spacing-sm) * 2);
+    }
+    
+    .report-option {
+        padding: var(--spacing-lg);
+    }
+    
+    .period-option {
+        padding: var(--spacing-md);
+        font-size: 0.9rem;
+    }
+    
+    .format-option {
+        padding: var(--spacing-md);
+    }
+
+    .container {
+        padding: var(--spacing-sm);
+    }
+    
+    .products-section, .requisitions-section, .user-list-section, .dashboard-section {
+        padding: var(--spacing-xl);
+    }
+    
+    .product-item, .requisition-item, .user-item {
+        padding: var(--spacing-lg);
+    }
+    
+    .modal-content {
+        width: 98%;
+        margin: var(--spacing-xs);
+    }
+    
+    .login-container {
+        padding: var(--spacing-2xl);
+    }
+
+    .lote-section {
+        padding: var(--spacing-lg);
+    }
+    
+    .lote-item {
+        padding: var(--spacing-md);
+    }
+    
+    .lote-badge {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        text-align: center;
+    }
+
+    .lote-dates {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+    
+    .lote-badge {
+        min-width: 100%;
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .lote-detail-item {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .report-date-info {
+        padding: var(--spacing-sm);
+    }
+
     .lote-selection-controls {
         flex-direction: column;
         gap: var(--spacing-md);
@@ -2780,25 +3024,6 @@ form {
         width: 100%;
         align-items: stretch;
     }
-}
-
-/* Animações específicas para seleção de lotes */
-@keyframes loteSelect {
-    0% {
-        transform: scale(0.8);
-        opacity: 0;
-    }
-    50% {
-        transform: scale(1.05);
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-.lote-selection-item.selected {
-    animation: loteSelect 0.3s ease-out;
 }
 
 /* Estados de loading para confirmação */
@@ -2859,4 +3084,138 @@ form {
 [data-tab].active {
     background-color: #4f46e5 !important;
     color: white !important;
+}
+
+/* ===================== SCROLLBAR PERSONALIZADA ===================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: var(--border-radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
+}
+
+/* Scrollbar personalizada para lista de lotes */
+.lote-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.lote-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.lote-list::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: var(--border-radius);
+}
+
+.lote-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
+}
+
+/* Scrollbar personalizada para listas de datas */
+.date-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.date-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.date-list::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: var(--border-radius);
+}
+
+.date-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
+}
+
+/* ===================== ESTADOS DE FOCUS E HOVER MELHORADOS ===================== */
+
+.lote-section:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.lote-item:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
+}
+
+.lote-badge:focus,
+.date-summary-item:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* ===================== CORREÇÕES DE ACESSIBILIDADE ===================== */
+
+/* Garantir contraste adequado para leitores de tela */
+.lote-creation-date,
+.product-detail .launch-date,
+.report-date-info .date-value {
+    color: var(--primary-color) !important;
+}
+
+/* Garantir boa legibilidade em todos os fundos */
+.lote-badge .lote-creation,
+.lote-detail-creation {
+    background: rgba(15, 52, 96, 0.6) !important;
+    color: var(--text-secondary) !important;
+}
+
+/* ===================== ESTILOS DE IMPRESSÃO PARA RELATÓRIOS ===================== */
+
+@media print {
+    .lote-creation-date,
+    .product-detail .launch-date,
+    .report-date-info {
+        background: white !important;
+        border: 1px solid #ccc !important;
+        color: #333 !important;
+    }
+    
+    .lote-badge {
+        background: white !important;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+    }
+}
+
+/* ===================== CORREÇÕES DE ACESSIBILIDADE ===================== */
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Modo escuro (preparação futura) */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1e293b;
+        --bg-secondary: #334155;
+        --bg-tertiary: #475569;
+        --bg-card: #1e293b;
+        --text-primary: #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-color: #475569;
+    }
 }
