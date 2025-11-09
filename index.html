@@ -184,7 +184,7 @@
         </div>
     </div>
 
-    <!-- Modal para adicionar/editar lote -->
+    <!-- Modal para adicionar/editar lote - ATUALIZADO COM CAMPO DE DATA DE CRIAÇÃO -->
     <div id="loteModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -204,6 +204,11 @@
                 <div class="form-group">
                     <label for="loteExpiry">Data de Validade do Lote *</label>
                     <input type="date" id="loteExpiry" name="loteExpiry" required>
+                </div>
+                <!-- NOVO CAMPO: DATA DE CRIAÇÃO DO LOTE -->
+                <div class="form-group date-readonly">
+                    <label for="loteCreation">Data de Criação do Lote</label>
+                    <input type="date" id="loteCreation" name="loteCreation" readonly>
                 </div>
                 <div class="form-actions">
                     <button type="button" id="cancelLoteBtn" class="btn-secondary">Cancelar</button>
@@ -255,65 +260,65 @@
     </div>
 
     <!-- Modal para selecionar produtos -->
-<div id="productSelectionModal" class="modal">
-    <div class="modal-content large-modal">
-        <div class="modal-header">
-            <h3>Selecionar Produtos e Lotes</h3>
-            <button type="button" id="closeProductSelectionModal" class="close-btn">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="search-container">
-                <input type="text" id="productSearchInput" placeholder="Buscar produtos...">
-                <select id="locationFilter" class="location-filter">
-                    <option value="">Todos os setores</option>
-                </select>
+    <div id="productSelectionModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3>Selecionar Produtos e Lotes</h3>
+                <button type="button" id="closeProductSelectionModal" class="close-btn">&times;</button>
             </div>
-            <div id="availableProductsList" class="available-products-list">
-                <!-- Produtos disponíveis para seleção -->
+            <div class="modal-body">
+                <div class="search-container">
+                    <input type="text" id="productSearchInput" placeholder="Buscar produtos...">
+                    <select id="locationFilter" class="location-filter">
+                        <option value="">Todos os setores</option>
+                    </select>
+                </div>
+                <div id="availableProductsList" class="available-products-list">
+                    <!-- Produtos disponíveis para seleção -->
+                </div>
             </div>
-        </div>
-        <div class="form-actions">
-            <button type="button" id="cancelProductSelectionBtn" class="btn-secondary">Cancelar</button>
-            <button type="button" id="confirmProductSelectionBtn" class="btn-primary">Confirmar Seleção</button>
+            <div class="form-actions">
+                <button type="button" id="cancelProductSelectionBtn" class="btn-secondary">Cancelar</button>
+                <button type="button" id="confirmProductSelectionBtn" class="btn-primary">Confirmar Seleção</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- NOVO MODAL PARA SELECIONAR LOTES -->
-<div id="loteSelectionModal" class="modal">
-    <div class="modal-content large-modal">
-        <div class="modal-header">
-            <h3 id="loteSelectionModalTitle">Selecionar Lotes para Consumo</h3>
-            <button type="button" id="closeLoteSelectionModal" class="close-btn">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="product-info-header">
-                <h4 id="selectedProductName"></h4>
-                <p id="selectedProductCode"></p>
-                <p>Quantidade total disponível: <strong id="totalAvailableQuantity">0</strong></p>
+    <!-- NOVO MODAL PARA SELECIONAR LOTES -->
+    <div id="loteSelectionModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h3 id="loteSelectionModalTitle">Selecionar Lotes para Consumo</h3>
+                <button type="button" id="closeLoteSelectionModal" class="close-btn">&times;</button>
             </div>
-            <div class="lote-selection-section">
-                <h4>Lotes Disponíveis</h4>
-                <div id="availableLotesList" class="available-lotes-list">
-                    <!-- Lotes disponíveis para seleção -->
+            <div class="modal-body">
+                <div class="product-info-header">
+                    <h4 id="selectedProductName"></h4>
+                    <p id="selectedProductCode"></p>
+                    <p>Quantidade total disponível: <strong id="totalAvailableQuantity">0</strong></p>
                 </div>
-                <div class="selection-summary">
-                    <h4>Resumo da Seleção</h4>
-                    <div id="selectedLotesSummary" class="selected-lotes-summary">
-                        Nenhum lote selecionado
+                <div class="lote-selection-section">
+                    <h4>Lotes Disponíveis</h4>
+                    <div id="availableLotesList" class="available-lotes-list">
+                        <!-- Lotes disponíveis para seleção -->
                     </div>
-                    <div class="total-selected">
-                        <strong>Total selecionado: <span id="totalSelectedQuantity">0</span></strong>
+                    <div class="selection-summary">
+                        <h4>Resumo da Seleção</h4>
+                        <div id="selectedLotesSummary" class="selected-lotes-summary">
+                            Nenhum lote selecionado
+                        </div>
+                        <div class="total-selected">
+                            <strong>Total selecionado: <span id="totalSelectedQuantity">0</span></strong>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="form-actions">
-            <button type="button" id="cancelLoteSelectionBtn" class="btn-secondary">Cancelar</button>
-            <button type="button" id="confirmLoteSelectionBtn" class="btn-primary">Confirmar Lotes</button>
+            <div class="form-actions">
+                <button type="button" id="cancelLoteSelectionBtn" class="btn-secondary">Cancelar</button>
+                <button type="button" id="confirmLoteSelectionBtn" class="btn-primary">Confirmar Lotes</button>
+            </div>
         </div>
     </div>
-</div>
 
     <!-- Modal para Adicionar/Editar Usuário -->
     <div id="userModal" class="modal">
