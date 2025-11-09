@@ -21,37 +21,37 @@ const db = getFirestore(app);
 
 class InventorySystem {
     constructor() {
-    this.products = [];
-    this.requisitions = [];
-    this.selectedProductsForRequisition = [];
-    this.currentTab = 'products';
-    this.nextRequisitionNumber = 1;
-    this.currentUser = null;
-    this.userRole = 'guest';
-    this.currentLotes = [];
-    this.editingLoteIndex = -1;
-    
-    // NOVAS VARIÁVEIS PARA SELEÇÃO DE LOTES
-    this.currentProductForLoteSelection = null;
-    this.selectedLotesForRequisition = [];
-    
-    // Variáveis para controle do relatório
-    this.currentReportType = null;
-    this.currentPeriod = null;
-    this.currentFormat = null;
-    
-    this.init();
-}
+        this.products = [];
+        this.requisitions = [];
+        this.selectedProductsForRequisition = [];
+        this.currentTab = 'products';
+        this.nextRequisitionNumber = 1;
+        this.currentUser = null;
+        this.userRole = 'guest';
+        this.currentLotes = [];
+        this.editingLoteIndex = -1;
+        
+        // NOVAS VARIÁVEIS PARA SELEÇÃO DE LOTES
+        this.currentProductForLoteSelection = null;
+        this.selectedLotesForRequisition = [];
+        
+        // Variáveis para controle do relatório
+        this.currentReportType = null;
+        this.currentPeriod = null;
+        this.currentFormat = null;
+        
+        this.init();
+    }
 
-   async init() {
-    this.setupEventListeners();
-    
-    // ⚠️ CARREGAR PRODUTOS MESMO SEM LOGIN
-    await this.loadFromFirestore();
-    await this.loadRequisitionsFromFirestore();
-    
-    await this.setupAuthListener();
-}
+    async init() {
+        this.setupEventListeners();
+        
+        // ⚠️ CARREGAR PRODUTOS MESMO SEM LOGIN
+        await this.loadFromFirestore();
+        await this.loadRequisitionsFromFirestore();
+        
+        await this.setupAuthListener();
+    }
 
     // ===================== SISTEMA DE RELATÓRIOS =====================
     
@@ -217,92 +217,145 @@ class InventorySystem {
     }
 
     async prepareReportData() {
-    const reportData = {
-        type: this.currentReportType,
-        period: this.currentPeriod,
-        generatedAt: new Date().toLocaleString('pt-BR'),
-        generatedBy: this.currentUser?.email || 'Sistema',
-        data: []
-    };
-    
-    // Adicionar dados de período personalizado se aplicável
-    if (this.currentPeriod === 'custom') {
-        const startDate = document.getElementById('startDate');
-        const endDate = document.getElementById('endDate');
-        if (startDate && endDate) {
-            reportData.startDate = startDate.value;
-            reportData.endDate = endDate.value;
+        const reportData = {
+            type: this.currentReportType,
+            period: this.currentPeriod,
+            generatedAt: new Date().toLocaleString('pt-BR'),
+            generatedBy: this.currentUser?.email || 'Sistema',
+            data: []
+        };
+        
+        // Adicionar dados de período personalizado se aplicável
+        if (this.currentPeriod === 'custom') {
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            if (startDate && endDate) {
+                reportData.startDate = startDate.value;
+                reportData.endDate = endDate.value;
+            }
         }
+        
+        if (this.currentReportType === 'products') {
+            // Filtrar produtos por período se necessário
+            let filteredProducts = this.products;
+            
+            if (this.currentPeriod !== 'all') {
+                filteredProducts = this.filterProductsByPeriod(filteredProducts);
+            }
+            
+            // ORGANIZAR POR SETOR COM DATAS DE CRIAÇÃO
+            const productsBySector = this.groupProductsBySectorWithDates(filteredProducts);
+            reportData.data = productsBySector;
+            
+        } else if (this.currentReportType === 'requisitions') {
+            // Filtrar requisições por período se necessário
+            let filteredRequisitions = this.requisitions;
+            
+            if (this.currentPeriod !== 'all') {
+                filteredRequisitions = this.filterRequisitionsByPeriod(filteredRequisitions);
+            }
+            
+            reportData.data = filteredRequisitions.map(requisition => ({
+                id: requisition.id,
+                status: requisition.status,
+                totalRequested: requisition.totalRequested,
+                finalizedQuantity: requisition.finalizedQuantity,
+                createdAt: requisition.createdAt,
+                createdBy: requisition.createdBy,
+                description: requisition.description,
+                local: requisition.local,
+                products: requisition.products || []
+            }));
+        }
+        
+        return reportData;
     }
-    
-    if (this.currentReportType === 'products') {
-        // Filtrar produtos por período se necessário
-        let filteredProducts = this.products;
+
+    // NOVO MÉTODO PARA AGRUPAR PRODUTOS COM DATAS DE CRIAÇÃO
+    groupProductsBySectorWithDates(products) {
+        const sectors = {};
         
-        if (this.currentPeriod !== 'all') {
-            filteredProducts = this.filterProductsByPeriod(filteredProducts);
-        }
+        products.forEach(product => {
+            const sector = product.local || 'Sem Setor';
+            
+            if (!sectors[sector]) {
+                sectors[sector] = {
+                    sectorName: sector,
+                    products: []
+                };
+            }
+            
+            // ADICIONAR DATA DE LANÇAMENTO DO PRODUTO
+            const productLaunchDate = product.lastUpdated || 
+                                     product.createdAt || 
+                                     new Date().toLocaleDateString('pt-BR');
+            
+            sectors[sector].products.push({
+                id: product.id,
+                name: product.name,
+                code: product.code,
+                quantity: product.quantity,
+                local: product.local,
+                description: product.description,
+                lastUpdated: product.lastUpdated,
+                // NOVA INFORMAÇÃO: DATA DE LANÇAMENTO DO PRODUTO
+                launchDate: productLaunchDate,
+                lotes: this.formatLotesWithCreationDates(product.lotes || []),
+                expiryStatus: this.getProductExpiryStatus(product.lotes)
+            });
+        });
         
-        // ORGANIZAR POR SETOR
-        const productsBySector = this.groupProductsBySector(filteredProducts);
-        reportData.data = productsBySector;
-        
-    } else if (this.currentReportType === 'requisitions') {
-        // Filtrar requisições por período se necessário
-        let filteredRequisitions = this.requisitions;
-        
-        if (this.currentPeriod !== 'all') {
-            filteredRequisitions = this.filterRequisitionsByPeriod(filteredRequisitions);
-        }
-        
-        reportData.data = filteredRequisitions.map(requisition => ({
-            id: requisition.id,
-            status: requisition.status,
-            totalRequested: requisition.totalRequested,
-            finalizedQuantity: requisition.finalizedQuantity,
-            createdAt: requisition.createdAt,
-            createdBy: requisition.createdBy,
-            description: requisition.description,
-            local: requisition.local,
-            products: requisition.products || []
+        // Ordenar setores alfabeticamente
+        return Object.values(sectors).sort((a, b) => 
+            a.sectorName.localeCompare(b.sectorName)
+        );
+    }
+
+    // MÉTODO PARA FORMATAR LOTES COM DATAS DE CRIAÇÃO
+    formatLotesWithCreationDates(lotes) {
+        return lotes.map(lote => ({
+            number: lote.number,
+            quantity: lote.quantity,
+            expiry: lote.expiry,
+            creationDate: lote.creationDate || 'Data não informada',
+            formattedCreationDate: lote.creationDate ? 
+                new Date(lote.creationDate).toLocaleDateString('pt-BR') : 
+                'Data não informada',
+            expiryStatus: this.getExpiryStatus(lote.expiry)
         }));
     }
-    
-    return reportData;
-}
 
-// ADICIONE ESTE MÉTODO PARA AGRUPAR POR SETOR
-groupProductsBySector(products) {
-    const sectors = {};
-    
-    products.forEach(product => {
-        const sector = product.local || 'Sem Setor';
+    // MÉTODO PARA FILTRAR PRODUTOS POR PERÍODO
+    filterProductsByPeriod(products) {
+        const dateRange = this.getPeriodDateRange();
+        if (!dateRange) return products;
         
-        if (!sectors[sector]) {
-            sectors[sector] = {
-                sectorName: sector,
-                products: []
-            };
+        const { startDate, endDate } = dateRange;
+        
+        return products.filter(product => {
+            // Usar a data de lançamento do produto para filtro
+            const productDate = this.getProductLaunchDate(product);
+            return productDate >= startDate && productDate <= endDate;
+        });
+    }
+
+    // MÉTODO PARA OBTER DATA DE LANÇAMENTO DO PRODUTO
+    getProductLaunchDate(product) {
+        // Tentar obter a data do último update, criação, ou usar data atual
+        if (product.lastUpdated) {
+            const parts = product.lastUpdated.split('/');
+            if (parts.length === 3) {
+                return new Date(parts[2], parts[1] - 1, parts[0]);
+            }
         }
         
-        sectors[sector].products.push({
-            id: product.id,
-            name: product.name,
-            code: product.code,
-            quantity: product.quantity,
-            local: product.local,
-            description: product.description,
-            lastUpdated: product.lastUpdated,
-            lotes: product.lotes || [],
-            expiryStatus: this.getProductExpiryStatus(product.lotes)
-        });
-    });
-    
-    // Ordenar setores alfabeticamente
-    return Object.values(sectors).sort((a, b) => 
-        a.sectorName.localeCompare(b.sectorName)
-    );
-}
+        if (product.createdAt) {
+            return new Date(product.createdAt);
+        }
+        
+        // Se não houver data específica, usar data atual
+        return new Date();
+    }
 
     getPeriodDateRange() {
         const today = new Date();
@@ -362,379 +415,418 @@ groupProductsBySector(products) {
     }
 
     async generatePDFReport(data) {
-    try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        // Configurações do documento
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 20;
-        let yPosition = margin;
-        
-        // ========== CABEÇALHO CORRIGIDO ==========
-        doc.setFillColor(139, 92, 246); // Cor primária do tema
-        doc.rect(0, 0, pageWidth, 50, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('RELATÓRIO DE ESTOQUE - ALMOXARIFADO', pageWidth / 2, 25, { align: 'center' });
-        
-        // Informações do relatório
-        yPosition = 70;
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'normal');
-        
-        const reportType = data.type === 'products' ? 'Produtos em Estoque' : 'Produtos Requisitados';
-        const periodLabel = this.getPeriodLabel(data.period);
-        
-        doc.text(`Tipo do Relatório: ${reportType}`, margin, yPosition);
-        yPosition += 8;
-        doc.text(`Período: ${periodLabel}`, margin, yPosition);
-        yPosition += 8;
-        
-        // Data de geração - CORRIGIDA
-        const generatedAt = new Date().toLocaleDateString('pt-BR') + ' ' + 
-                           new Date().toLocaleTimeString('pt-BR', { 
-                               hour: '2-digit', 
-                               minute: '2-digit',
-                               hour12: false 
-                           });
-        doc.text(`Gerado em: ${generatedAt}`, margin, yPosition);
-        yPosition += 8;
-        doc.text(`Gerado por: ${data.generatedBy || 'Sistema'}`, margin, yPosition);
-        yPosition += 20;
-        
-        // Resto do código permanece igual...
-        if (data.type === 'products') {
-            await this.generateProductsPDF(doc, data, margin, pageWidth, yPosition);
-        } else {
-            await this.generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition);
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Configurações do documento
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 20;
+            let yPosition = margin;
+            
+            // ========== CABEÇALHO CORRIGIDO ==========
+            doc.setFillColor(139, 92, 246); // Cor primária do tema
+            doc.rect(0, 0, pageWidth, 50, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('RELATÓRIO DE ESTOQUE - ALMOXARIFADO', pageWidth / 2, 25, { align: 'center' });
+            
+            // Informações do relatório
+            yPosition = 70;
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'normal');
+            
+            const reportType = data.type === 'products' ? 'Produtos em Estoque' : 'Produtos Requisitados';
+            const periodLabel = this.getPeriodLabel(data.period);
+            
+            doc.text(`Tipo do Relatório: ${reportType}`, margin, yPosition);
+            yPosition += 8;
+            doc.text(`Período: ${periodLabel}`, margin, yPosition);
+            yPosition += 8;
+            
+            // Data de geração - CORRIGIDA
+            const generatedAt = new Date().toLocaleDateString('pt-BR') + ' ' + 
+                               new Date().toLocaleTimeString('pt-BR', { 
+                                   hour: '2-digit', 
+                                   minute: '2-digit',
+                                   hour12: false 
+                               });
+            doc.text(`Gerado em: ${generatedAt}`, margin, yPosition);
+            yPosition += 8;
+            doc.text(`Gerado por: ${data.generatedBy || 'Sistema'}`, margin, yPosition);
+            yPosition += 20;
+            
+            // Resto do código permanece igual...
+            if (data.type === 'products') {
+                await this.generateProductsPDF(doc, data, margin, pageWidth, yPosition);
+            } else {
+                await this.generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition);
+            }
+            
+            // Salvar o PDF
+            const fileName = `relatorio_${data.type}_${new Date().getTime()}.pdf`;
+            doc.save(fileName);
+            
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            throw new Error('Falha ao gerar PDF');
         }
-        
-        // Salvar o PDF
-        const fileName = `relatorio_${data.type}_${new Date().getTime()}.pdf`;
-        doc.save(fileName);
-        
-    } catch (error) {
-        console.error('Erro ao gerar PDF:', error);
-        throw new Error('Falha ao gerar PDF');
     }
-}
 
-   async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PRODUTOS EM ESTOQUE - ORGANIZADO POR SETOR', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 25;
-    
-    if (data.data.length === 0) {
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
-        return;
-    }
-    
-    // Configurações de layout melhoradas
-    const lineHeight = 12;
-    const rowHeight = 18;
-    const headerHeight = 16;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const sectorSpacing = 25; // Espaço entre setores
-    
-    // PERCORRER CADA SETOR
-    data.data.forEach((sectorData, sectorIndex) => {
-        // Verificar se precisa de nova página antes de começar um novo setor
-        if (yPosition > pageHeight - 100) {
-            doc.addPage();
-            yPosition = margin;
-        }
-        
-        // ========== CABEÇALHO DO SETOR ==========
-        doc.setFillColor(79, 70, 229); // Azul escuro para setores
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(14);
+    async generateProductsPDF(doc, data, margin, pageWidth, yPosition) {
+        doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
-        
-        doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()}`, margin + 10, yPosition + 12);
-        
+        doc.text('PRODUTOS EM ESTOQUE - ORGANIZADO POR SETOR', pageWidth / 2, yPosition, { align: 'center' });
         yPosition += 25;
         
-        // ========== CABEÇALHO DA TABELA DO SETOR ==========
-        if (sectorData.products.length > 0) {
-            doc.setFillColor(200, 200, 200);
-            doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
-            doc.setTextColor(0, 0, 0);
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            
-            const colWidth = (pageWidth - 2 * margin) / 5;
-            doc.text('CÓDIGO', margin + 5, yPosition + 10);
-            doc.text('NOME DO PRODUTO', margin + colWidth + 5, yPosition + 10);
-            doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
-            doc.text('STATUS', margin + 3 * colWidth + 5, yPosition + 10);
-            doc.text('ÚLT. ATUAL.', margin + 4 * colWidth + 5, yPosition + 10);
-            
-            yPosition += headerHeight + 5;
-            
-            // ========== PRODUTOS DO SETOR ==========
+        if (data.data.length === 0) {
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
-            
-            sectorData.products.forEach((product, productIndex) => {
-                // Verificar se precisa de nova página
-                if (yPosition + rowHeight > pageHeight - margin) {
-                    doc.addPage();
-                    yPosition = margin;
-                    
-                    // Redesenhar cabeçalho do setor na nova página
-                    doc.setFillColor(79, 70, 229);
-                    doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
-                    doc.setTextColor(255, 255, 255);
-                    doc.setFontSize(14);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()} (Continuação)`, margin + 10, yPosition + 12);
-                    yPosition += 25;
-                    
-                    // Redesenhar cabeçalho da tabela
-                    doc.setFillColor(200, 200, 200);
-                    doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
-                    doc.setTextColor(0, 0, 0);
-                    doc.setFontSize(10);
-                    doc.setFont('helvetica', 'bold');
-                    
-                    doc.text('CÓDIGO', margin + 5, yPosition + 10);
-                    doc.text('NOME DO PRODUTO', margin + colWidth + 5, yPosition + 10);
-                    doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
-                    doc.text('STATUS', margin + 3 * colWidth + 5, yPosition + 10);
-                    doc.text('ÚLT. ATUAL.', margin + 4 * colWidth + 5, yPosition + 10);
-                    
-                    yPosition += headerHeight + 5;
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(9);
-                }
-                
-                // Texto com posicionamento vertical melhorado
-                const textY = yPosition + 8;
-                doc.text(product.code || '-', margin + 5, textY);
-                
-                // Quebrar texto longo do nome em múltiplas linhas
-                const productName = product.name || '-';
-                const maxNameWidth = colWidth - 10;
-                const nameLines = doc.splitTextToSize(productName, maxNameWidth);
-                
-                if (nameLines.length > 1) {
-                    doc.text(nameLines[0], margin + colWidth + 5, textY);
-                    doc.text(nameLines[1], margin + colWidth + 5, textY + 5);
-                } else {
-                    doc.text(productName, margin + colWidth + 5, textY);
-                }
-                
-                doc.text(this.formatNumber(product.quantity || 0), margin + 2 * colWidth + 5, textY);
-                doc.text(product.expiryStatus?.label || '-', margin + 3 * colWidth + 5, textY);
-                doc.text(product.lastUpdated || '-', margin + 4 * colWidth + 5, textY);
-                
-                // Ajustar altura baseado no número de linhas do nome
-                const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
-                yPosition += actualRowHeight;
-            });
-            
-            // ========== RESUMO DO SETOR ==========
-            yPosition += 10;
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            const sectorTotal = sectorData.products.reduce((sum, product) => sum + (product.quantity || 0), 0);
-            doc.text(`Total do Setor: ${this.formatNumber(sectorData.products.length)} produtos, ${this.formatNumber(sectorTotal)} itens`, margin, yPosition);
-            
-            yPosition += sectorSpacing;
+            doc.text('Nenhum produto encontrado para o período selecionado.', margin, yPosition);
+            return;
         }
-    });
-    
-    // ========== RESUMO GERAL ==========
-    if (yPosition > pageHeight - 30) {
-        doc.addPage();
-        yPosition = margin;
-    }
-    
-    yPosition += 10;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    
-    const totalProducts = data.data.reduce((sum, sector) => sum + sector.products.length, 0);
-    const totalQuantity = data.data.reduce((sum, sector) => 
-        sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.quantity || 0), 0), 0
-    );
-    
-    doc.text(`RESUMO GERAL:`, margin, yPosition);
-    yPosition += 12;
-    doc.text(`• ${this.formatNumber(data.data.length)} Setores`, margin + 10, yPosition);
-    yPosition += 10;
-    doc.text(`• ${this.formatNumber(totalProducts)} Produtos`, margin + 10, yPosition);
-    yPosition += 10;
-    doc.text(`• ${this.formatNumber(totalQuantity)} Itens em Estoque`, margin + 10, yPosition);
-}
-
-async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
-    // Configurar fonte que suporte caracteres portugueses
-    doc.setFont('helvetica');
-    
-    // Cabeçalho principal
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PRODUTOS REQUISITADOS', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 25;
-    
-    if (data.data.length === 0) {
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Nenhuma requisição encontrada para o período selecionado.', margin, yPosition);
-        return;
-    }
-    
-    const pageHeight = doc.internal.pageSize.getHeight();
-    
-    data.data.forEach((requisition, reqIndex) => {
-        // Verificar se precisa de nova página
-        if (yPosition > pageHeight - 150) {
+        
+        // Configurações de layout melhoradas
+        const lineHeight = 12;
+        const rowHeight = 18;
+        const headerHeight = 16;
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const sectorSpacing = 25; // Espaço entre setores
+        
+        // PERCORRER CADA SETOR
+        data.data.forEach((sectorData, sectorIndex) => {
+            // Verificar se precisa de nova página antes de começar um novo setor
+            if (yPosition > pageHeight - 100) {
+                doc.addPage();
+                yPosition = margin;
+            }
+            
+            // ========== CABEÇALHO DO SETOR ==========
+            doc.setFillColor(79, 70, 229); // Azul escuro para setores
+            doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            
+            doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()}`, margin + 10, yPosition + 12);
+            
+            yPosition += 25;
+            
+            // ========== CABEÇALHO DA TABELA DO SETOR ==========
+            if (sectorData.products.length > 0) {
+                doc.setFillColor(200, 200, 200);
+                doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
+                doc.setTextColor(0, 0, 0);
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'bold');
+                
+                // AJUSTAR COLUNAS PARA INCLUIR DATA DE LANÇAMENTO
+                const colWidth = (pageWidth - 2 * margin) / 6;
+                doc.text('CÓDIGO', margin + 5, yPosition + 10);
+                doc.text('NOME', margin + colWidth + 5, yPosition + 10);
+                doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
+                doc.text('LANÇAMENTO', margin + 3 * colWidth + 5, yPosition + 10);
+                doc.text('STATUS', margin + 4 * colWidth + 5, yPosition + 10);
+                doc.text('LOTES', margin + 5 * colWidth + 5, yPosition + 10);
+                
+                yPosition += headerHeight + 5;
+                
+                // ========== PRODUTOS DO SETOR ==========
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8); // Reduzir fonte para caber mais informações
+                
+                sectorData.products.forEach((product, productIndex) => {
+                    // Verificar se precisa de nova página
+                    if (yPosition + rowHeight > pageHeight - margin) {
+                        doc.addPage();
+                        yPosition = margin;
+                        
+                        // Redesenhar cabeçalho do setor na nova página
+                        doc.setFillColor(79, 70, 229);
+                        doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, 'F');
+                        doc.setTextColor(255, 255, 255);
+                        doc.setFontSize(14);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`SETOR: ${sectorData.sectorName.toUpperCase()} (Continuação)`, margin + 10, yPosition + 12);
+                        yPosition += 25;
+                        
+                        // Redesenhar cabeçalho da tabela
+                        doc.setFillColor(200, 200, 200);
+                        doc.rect(margin, yPosition, pageWidth - 2 * margin, headerHeight, 'F');
+                        doc.setTextColor(0, 0, 0);
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        
+                        doc.text('CÓDIGO', margin + 5, yPosition + 10);
+                        doc.text('NOME', margin + colWidth + 5, yPosition + 10);
+                        doc.text('QUANTIDADE', margin + 2 * colWidth + 5, yPosition + 10);
+                        doc.text('LANÇAMENTO', margin + 3 * colWidth + 5, yPosition + 10);
+                        doc.text('STATUS', margin + 4 * colWidth + 5, yPosition + 10);
+                        doc.text('LOTES', margin + 5 * colWidth + 5, yPosition + 10);
+                        
+                        yPosition += headerHeight + 5;
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(8);
+                    }
+                    
+                    // Texto com posicionamento vertical melhorado
+                    const textY = yPosition + 6;
+                    doc.text(product.code || '-', margin + 5, textY);
+                    
+                    // Nome do produto
+                    const productName = product.name || '-';
+                    const maxNameWidth = colWidth - 10;
+                    const nameLines = doc.splitTextToSize(productName, maxNameWidth);
+                    
+                    if (nameLines.length > 1) {
+                        doc.text(nameLines[0], margin + colWidth + 5, textY);
+                        doc.text(nameLines[1], margin + colWidth + 5, textY + 4);
+                    } else {
+                        doc.text(productName, margin + colWidth + 5, textY);
+                    }
+                    
+                    doc.text(this.formatNumber(product.quantity || 0), margin + 2 * colWidth + 5, textY);
+                    
+                    // DATA DE LANÇAMENTO
+                    doc.text(product.launchDate || '-', margin + 3 * colWidth + 5, textY);
+                    
+                    doc.text(product.expiryStatus?.label || '-', margin + 4 * colWidth + 5, textY);
+                    
+                    // NÚMERO DE LOTES
+                    doc.text(`${product.lotes?.length || 0}`, margin + 5 * colWidth + 5, textY);
+                    
+                    // Ajustar altura baseado no número de linhas do nome
+                    const actualRowHeight = nameLines.length > 1 ? rowHeight + 5 : rowHeight;
+                    yPosition += actualRowHeight;
+                    
+                    // ADICIONAR INFORMAÇÕES DOS LOTES SE HOUVER ESPAÇO
+                    if (product.lotes && product.lotes.length > 0 && yPosition < pageHeight - 50) {
+                        product.lotes.forEach((lote, loteIndex) => {
+                            if (yPosition + 15 > pageHeight - margin) {
+                                doc.addPage();
+                                yPosition = margin;
+                            }
+                            
+                            const loteText = `  • Lote ${lote.number}: ${this.formatNumber(lote.quantity)} (Criado: ${lote.formattedCreationDate})`;
+                            const loteLines = doc.splitTextToSize(loteText, pageWidth - 2 * margin - 20);
+                            
+                            loteLines.forEach(line => {
+                                if (yPosition + 10 > pageHeight - margin) {
+                                    doc.addPage();
+                                    yPosition = margin;
+                                }
+                                doc.text(line, margin + 10, yPosition + 8);
+                                yPosition += 6;
+                            });
+                        });
+                        yPosition += 5;
+                    }
+                });
+                
+                // ========== RESUMO DO SETOR ==========
+                yPosition += 10;
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                const sectorTotal = sectorData.products.reduce((sum, product) => sum + (product.quantity || 0), 0);
+                const totalLotes = sectorData.products.reduce((sum, product) => sum + (product.lotes?.length || 0), 0);
+                
+                doc.text(`Total do Setor: ${this.formatNumber(sectorData.products.length)} produtos, ${this.formatNumber(sectorTotal)} itens, ${this.formatNumber(totalLotes)} lotes`, margin, yPosition);
+                
+                yPosition += sectorSpacing;
+            }
+        });
+        
+        // ========== RESUMO GERAL ==========
+        if (yPosition > pageHeight - 30) {
             doc.addPage();
             yPosition = margin;
-        }
-        
-        // ========== CABEÇALHO DA REQUISIÇÃO ==========
-doc.setFillColor(139, 92, 246); // Cor roxa do tema
-doc.rect(margin, yPosition, pageWidth - 2 * margin, 35, 'F'); // Aumentei a altura para 35
-doc.setTextColor(255, 255, 255);
-doc.setFontSize(12);
-doc.setFont('helvetica', 'bold');
-
-// Número da requisição - CORRIGIDO
-const requisitionId = requisition.id || 'N/A';
-doc.text(`Requisição #${requisitionId}`, margin + 10, yPosition + 10);
-
-// Status
-const status = requisition.status || 'Pendente';
-doc.text(`Status: ${status}`, margin + 120, yPosition + 10);
-
-// Data - EM LINHA SEPARADA
-const createdAt = requisition.createdAt ? 
-    new Date(requisition.createdAt).toLocaleDateString('pt-BR') : 
-    'Data não disponível';
-doc.text(`Data: ${createdAt}`, margin + 10, yPosition + 25); // Mudei para linha abaixo
-
-yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
-        
-        // ========== INFORMAÇÕES ADICIONAIS ==========
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        
-        // Informações do solicitante
-        if (requisition.createdBy) {
-            doc.text(`Solicitante: ${requisition.createdBy}`, margin + 10, yPosition);
-            yPosition += 8;
-        }
-        
-        if (requisition.description) {
-            const descLines = doc.splitTextToSize(`Descrição: ${requisition.description}`, pageWidth - 2 * margin - 20);
-            doc.text(descLines, margin + 10, yPosition);
-            yPosition += descLines.length * 6 + 5;
         }
         
         yPosition += 10;
-        
-        // ========== CABEÇALHO DA TABELA DE PRODUTOS ==========
-        doc.setFillColor(200, 200, 200);
-        doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
         
-        const colWidth = (pageWidth - 2 * margin) / 4;
-        doc.text('PRODUTO', margin + 5, yPosition + 8);
-        doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
-        doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
-        doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
+        const totalProducts = data.data.reduce((sum, sector) => sum + sector.products.length, 0);
+        const totalQuantity = data.data.reduce((sum, sector) => 
+            sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.quantity || 0), 0), 0
+        );
+        const totalLotes = data.data.reduce((sum, sector) => 
+            sum + sector.products.reduce((sectorSum, product) => sectorSum + (product.lotes?.length || 0), 0), 0
+        );
         
-        yPosition += 15;
+        doc.text(`RESUMO GERAL:`, margin, yPosition);
+        yPosition += 12;
+        doc.text(`• ${this.formatNumber(data.data.length)} Setores`, margin + 10, yPosition);
+        yPosition += 10;
+        doc.text(`• ${this.formatNumber(totalProducts)} Produtos`, margin + 10, yPosition);
+        yPosition += 10;
+        doc.text(`• ${this.formatNumber(totalQuantity)} Itens em Estoque`, margin + 10, yPosition);
+        yPosition += 10;
+        doc.text(`• ${this.formatNumber(totalLotes)} Lotes Cadastrados`, margin + 10, yPosition);
+    }
+
+    async generateRequisitionsPDF(doc, data, margin, pageWidth, yPosition) {
+        // Configurar fonte que suporte caracteres portugueses
+        doc.setFont('helvetica');
         
-        // ========== LISTA DE PRODUTOS ==========
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        // Cabeçalho principal
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PRODUTOS REQUISITADOS', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 25;
         
-        requisition.products.forEach((product, prodIndex) => {
-            // Verificar espaço para próximo produto
-            if (yPosition > pageHeight - 20) {
+        if (data.data.length === 0) {
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Nenhuma requisição encontrada para o período selecionado.', margin, yPosition);
+            return;
+        }
+        
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        data.data.forEach((requisition, reqIndex) => {
+            // Verificar se precisa de nova página
+            if (yPosition > pageHeight - 150) {
                 doc.addPage();
                 yPosition = margin;
-                
-                // Redesenhar cabeçalho na nova página
-                doc.setFillColor(200, 200, 200);
-                doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
-                doc.setTextColor(0, 0, 0);
-                doc.setFontSize(9);
-                doc.setFont('helvetica', 'bold');
-                
-                doc.text('PRODUTO', margin + 5, yPosition + 8);
-                doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
-                doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
-                doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
-                
-                yPosition += 15;
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(8);
             }
             
-            // Nome do produto (com quebra de linha se necessário)
-            const productName = product.name || 'Produto não informado';
-            const nameLines = doc.splitTextToSize(productName, colWidth - 10);
+            // ========== CABEÇALHO DA REQUISIÇÃO ==========
+            doc.setFillColor(139, 92, 246); // Cor roxa do tema
+            doc.rect(margin, yPosition, pageWidth - 2 * margin, 35, 'F'); // Aumentei a altura para 35
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+
+            // Número da requisição - CORRIGIDO
+            const requisitionId = requisition.id || 'N/A';
+            doc.text(`Requisição #${requisitionId}`, margin + 10, yPosition + 10);
+
+            // Status
+            const status = requisition.status || 'Pendente';
+            doc.text(`Status: ${status}`, margin + 120, yPosition + 10);
+
+            // Data - EM LINHA SEPARADA
+            const createdAt = requisition.createdAt ? 
+                new Date(requisition.createdAt).toLocaleDateString('pt-BR') : 
+                'Data não disponível';
+            doc.text(`Data: ${createdAt}`, margin + 10, yPosition + 25); // Mudei para linha abaixo
+
+            yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
+                    
+            // ========== INFORMAÇÕES ADICIONAIS ==========
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
             
-            // Código do produto
-            const productCode = product.code || 'N/A';
-            
-            // Quantidades
-            const requestedQty = this.formatNumber(product.requestedQuantity || 0);
-            const availableQty = this.formatNumber(product.availableQuantity || 0);
-            
-            // Desenhar primeira linha
-            doc.text(nameLines[0], margin + 5, yPosition + 6);
-            doc.text(productCode, margin + colWidth + 5, yPosition + 6);
-            doc.text(requestedQty, margin + 2 * colWidth + 5, yPosition + 6);
-            doc.text(availableQty, margin + 3 * colWidth + 5, yPosition + 6);
-            
-            // Se o nome tiver múltiplas linhas, ajustar altura
-            if (nameLines.length > 1) {
-                yPosition += 6;
-                doc.text(nameLines[1], margin + 5, yPosition + 6);
+            // Informações do solicitante
+            if (requisition.createdBy) {
+                doc.text(`Solicitante: ${requisition.createdBy}`, margin + 10, yPosition);
+                yPosition += 8;
             }
             
-            yPosition += 12; // Espaçamento entre produtos
+            if (requisition.description) {
+                const descLines = doc.splitTextToSize(`Descrição: ${requisition.description}`, pageWidth - 2 * margin - 20);
+                doc.text(descLines, margin + 10, yPosition);
+                yPosition += descLines.length * 6 + 5;
+            }
+            
+            yPosition += 10;
+            
+            // ========== CABEÇALHO DA TABELA DE PRODUTOS ==========
+            doc.setFillColor(200, 200, 200);
+            doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            
+            const colWidth = (pageWidth - 2 * margin) / 4;
+            doc.text('PRODUTO', margin + 5, yPosition + 8);
+            doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
+            doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
+            doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
+            
+            yPosition += 15;
+            
+            // ========== LISTA DE PRODUTOS ==========
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            
+            requisition.products.forEach((product, prodIndex) => {
+                // Verificar espaço para próximo produto
+                if (yPosition > pageHeight - 20) {
+                    doc.addPage();
+                    yPosition = margin;
+                    
+                    // Redesenhar cabeçalho na nova página
+                    doc.setFillColor(200, 200, 200);
+                    doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F');
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    
+                    doc.text('PRODUTO', margin + 5, yPosition + 8);
+                    doc.text('CÓDIGO', margin + colWidth + 5, yPosition + 8);
+                    doc.text('REQUISITADO', margin + 2 * colWidth + 5, yPosition + 8);
+                    doc.text('DISPONÍVEL', margin + 3 * colWidth + 5, yPosition + 8);
+                    
+                    yPosition += 15;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8);
+                }
+                
+                // Nome do produto (com quebra de linha se necessário)
+                const productName = product.name || 'Produto não informado';
+                const nameLines = doc.splitTextToSize(productName, colWidth - 10);
+                
+                // Código do produto
+                const productCode = product.code || 'N/A';
+                
+                // Quantidades
+                const requestedQty = this.formatNumber(product.requestedQuantity || 0);
+                const availableQty = this.formatNumber(product.availableQuantity || 0);
+                
+                // Desenhar primeira linha
+                doc.text(nameLines[0], margin + 5, yPosition + 6);
+                doc.text(productCode, margin + colWidth + 5, yPosition + 6);
+                doc.text(requestedQty, margin + 2 * colWidth + 5, yPosition + 6);
+                doc.text(availableQty, margin + 3 * colWidth + 5, yPosition + 6);
+                
+                // Se o nome tiver múltiplas linhas, ajustar altura
+                if (nameLines.length > 1) {
+                    yPosition += 6;
+                    doc.text(nameLines[1], margin + 5, yPosition + 6);
+                }
+                
+                yPosition += 12; // Espaçamento entre produtos
+            });
+            
+            yPosition += 15; // Espaço entre requisições
+            
+            // ========== RESUMO DA REQUISIÇÃO ==========
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Total de itens requisitados: ${this.formatNumber(requisition.totalRequested || 0)}`, margin, yPosition);
+            
+            yPosition += 20; // Espaço para próxima requisição
         });
         
-        yPosition += 15; // Espaço entre requisições
+        // ========== RESUMO GERAL ==========
+        if (yPosition > pageHeight - 30) {
+            doc.addPage();
+            yPosition = margin;
+        }
         
-        // ========== RESUMO DA REQUISIÇÃO ==========
-        doc.setFontSize(9);
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.text(`Total de itens requisitados: ${this.formatNumber(requisition.totalRequested || 0)}`, margin, yPosition);
+        doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
+        yPosition += 12;
         
-        yPosition += 20; // Espaço para próxima requisição
-    });
-    
-    // ========== RESUMO GERAL ==========
-    if (yPosition > pageHeight - 30) {
-        doc.addPage();
-        yPosition = margin;
+        const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
+        doc.text(`Total Geral de Itens: ${this.formatNumber(totalRequested)}`, margin, yPosition);
     }
-    
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Total de Requisições: ${this.formatNumber(data.data.length)}`, margin, yPosition);
-    yPosition += 12;
-    
-    const totalRequested = data.data.reduce((sum, req) => sum + (req.totalRequested || 0), 0);
-    doc.text(`Total Geral de Itens: ${this.formatNumber(totalRequested)}`, margin, yPosition);
-}
 
     getPeriodLabel(period) {
         const labels = {
@@ -750,84 +842,108 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
     }
 
     async generateExcelReport(data) {
-    try {
-        // Criar workbook
-        const wb = XLSX.utils.book_new();
-        
-        if (data.type === 'products') {
-            // ORGANIZADO POR SETOR NO EXCEL
-            data.data.forEach((sectorData, sectorIndex) => {
-                // Preparar dados para produtos do setor
-                const excelData = sectorData.products.map(product => ({
-                    'Código': product.code,
-                    'Nome do Produto': product.name,
-                    'Quantidade': product.quantity,
-                    'Descrição': product.description,
-                    'Última Atualização': product.lastUpdated,
-                    'Status Validade': product.expiryStatus?.label,
-                    'Número de Lotes': product.lotes?.length || 0
+        try {
+            // Criar workbook
+            const wb = XLSX.utils.book_new();
+            
+            if (data.type === 'products') {
+                // ORGANIZADO POR SETOR NO EXCEL COM DATAS
+                data.data.forEach((sectorData, sectorIndex) => {
+                    // Preparar dados para produtos do setor
+                    const excelData = sectorData.products.map(product => ({
+                        'Código': product.code,
+                        'Nome do Produto': product.name,
+                        'Quantidade': product.quantity,
+                        'Data de Lançamento': product.launchDate,
+                        'Descrição': product.description,
+                        'Última Atualização': product.lastUpdated,
+                        'Status Validade': product.expiryStatus?.label,
+                        'Número de Lotes': product.lotes?.length || 0
+                    }));
+                    
+                    // Nome da aba baseado no setor
+                    let sheetName = sectorData.sectorName || 'Sem Setor';
+                    sheetName = sheetName.substring(0, 31);
+                    
+                    if (sheetName.length === 31) {
+                        sheetName = sheetName.substring(0, 28) + '...';
+                    }
+                    
+                    // Garantir nomes únicos
+                    let finalSheetName = sheetName;
+                    let counter = 1;
+                    while (wb.SheetNames.includes(finalSheetName)) {
+                        finalSheetName = `${sheetName.substring(0, 26)}_${counter}`;
+                        counter++;
+                    }
+                    
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
+                    
+                    // Adicionar cabeçalho do setor como primeira linha
+                    if (excelData.length > 0) {
+                        XLSX.utils.sheet_add_aoa(ws, [[`SETOR: ${sectorData.sectorName}`]], { origin: -1 });
+                        XLSX.utils.sheet_add_aoa(ws, [['']], { origin: -1 });
+                    }
+                    
+                    // ADICIONAR ABA DETALHADA DOS LOTES PARA ESTE SETOR
+                    const lotesData = [];
+                    sectorData.products.forEach(product => {
+                        if (product.lotes && product.lotes.length > 0) {
+                            product.lotes.forEach(lote => {
+                                lotesData.push({
+                                    'Produto': product.name,
+                                    'Código': product.code,
+                                    'Número do Lote': lote.number,
+                                    'Quantidade no Lote': lote.quantity,
+                                    'Data de Criação do Lote': lote.formattedCreationDate,
+                                    'Data de Validade': new Date(lote.expiry).toLocaleDateString('pt-BR'),
+                                    'Status Validade': lote.expiryStatus?.label
+                                });
+                            });
+                        }
+                    });
+                    
+                    if (lotesData.length > 0) {
+                        const lotesSheetName = `${finalSheetName.substring(0, 13)}_Lotes`;
+                        const wsLotes = XLSX.utils.json_to_sheet(lotesData);
+                        XLSX.utils.book_append_sheet(wb, wsLotes, lotesSheetName);
+                    }
+                });
+                
+                // Se não houver produtos, criar uma aba vazia
+                if (data.data.length === 0) {
+                    const ws = XLSX.utils.aoa_to_sheet([['Nenhum produto encontrado']]);
+                    XLSX.utils.book_append_sheet(wb, ws, "Sem Dados");
+                }
+                
+            } else {
+                // Preparar dados para requisições (mantém igual)
+                const excelData = data.data.map(requisition => ({
+                    'ID Requisição': requisition.id,
+                    'Status': requisition.status,
+                    'Total Requisitado': requisition.totalRequested,
+                    'Quantidade Finalizada': requisition.finalizedQuantity || 0,
+                    'Data': this.formatDateTime(requisition.createdAt),
+                    'Solicitante': requisition.createdBy,
+                    'Descrição': requisition.description,
+                    'Setor': requisition.local,
+                    'Número de Produtos': requisition.products?.length || 0
                 }));
                 
-                // Nome da aba baseado no setor (limitado a 31 caracteres)
-                let sheetName = sectorData.sectorName || 'Sem Setor';
-                sheetName = sheetName.substring(0, 31); // Excel limita a 31 caracteres
-                
-                // Se o nome for muito longo, adicionar número
-                if (sheetName.length === 31) {
-                    sheetName = sheetName.substring(0, 28) + '...';
-                }
-                
-                // Garantir nomes únicos
-                let finalSheetName = sheetName;
-                let counter = 1;
-                while (wb.SheetNames.includes(finalSheetName)) {
-                    finalSheetName = `${sheetName.substring(0, 26)}_${counter}`;
-                    counter++;
-                }
-                
                 const ws = XLSX.utils.json_to_sheet(excelData);
-                XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
-                
-                // Adicionar cabeçalho do setor como primeira linha
-                if (excelData.length > 0) {
-                    XLSX.utils.sheet_add_aoa(ws, [[`SETOR: ${sectorData.sectorName}`]], { origin: -1 });
-                    XLSX.utils.sheet_add_aoa(ws, [['']], { origin: -1 }); // Linha em branco
-                }
-            });
-            
-            // Se não houver produtos, criar uma aba vazia
-            if (data.data.length === 0) {
-                const ws = XLSX.utils.aoa_to_sheet([['Nenhum produto encontrado']]);
-                XLSX.utils.book_append_sheet(wb, ws, "Sem Dados");
+                XLSX.utils.book_append_sheet(wb, ws, "Requisições");
             }
             
-        } else {
-            // Preparar dados para requisições (mantém igual)
-            const excelData = data.data.map(requisition => ({
-                'ID Requisição': requisition.id,
-                'Status': requisition.status,
-                'Total Requisitado': requisition.totalRequested,
-                'Quantidade Finalizada': requisition.finalizedQuantity || 0,
-                'Data': this.formatDateTime(requisition.createdAt),
-                'Solicitante': requisition.createdBy,
-                'Descrição': requisition.description,
-                'Setor': requisition.local,
-                'Número de Produtos': requisition.products?.length || 0
-            }));
+            // Salvar o arquivo
+            const fileName = `relatorio_${data.type}_${new Date().getTime()}.xlsx`;
+            XLSX.writeFile(wb, fileName);
             
-            const ws = XLSX.utils.json_to_sheet(excelData);
-            XLSX.utils.book_append_sheet(wb, ws, "Requisições");
+        } catch (error) {
+            console.error('Erro ao gerar Excel:', error);
+            throw new Error('Falha ao gerar Excel');
         }
-        
-        // Salvar o arquivo
-        const fileName = `relatorio_${data.type}_${new Date().getTime()}.xlsx`;
-        XLSX.writeFile(wb, fileName);
-        
-    } catch (error) {
-        console.error('Erro ao gerar Excel:', error);
-        throw new Error('Falha ao gerar Excel');
     }
-}
 
     logout() {
         if (confirm('Tem certeza que deseja sair do sistema?')) {
@@ -960,22 +1076,22 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
 
     // ===================== Firestore Operations =====================
     async loadFromFirestore() {
-    try {
-        const productsCol = collection(db, "products");
-        const productSnapshot = await getDocs(productsCol);
-        this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log("✅ Produtos carregados:", this.products.length, "produtos");
-        
-        // ⚠️ ADICIONE ESTAS LINhas PARA FORÇAR O RENDER:
-        this.render();
-        this.updateStats();
-        this.updateDashboard();
-        this.populateLocationFilter();
-        
-    } catch (error) {
-        console.error("❌ Erro ao carregar dados:", error);
+        try {
+            const productsCol = collection(db, "products");
+            const productSnapshot = await getDocs(productsCol);
+            this.products = productSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("✅ Produtos carregados:", this.products.length, "produtos");
+            
+            // ⚠️ ADICIONE ESTAS LINHAS PARA FORÇAR O RENDER:
+            this.render();
+            this.updateStats();
+            this.updateDashboard();
+            this.populateLocationFilter();
+            
+        } catch (error) {
+            console.error("❌ Erro ao carregar dados:", error);
+        }
     }
-}
 
     async loadRequisitionsFromFirestore() {
         try {
@@ -1083,6 +1199,13 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         const loteIndex = document.getElementById('loteIndex');
         if (loteIndex) loteIndex.value = '';
         
+        // DEFINIR DATA ATUAL NO CAMPO DE CRIAÇÃO
+        const loteCreation = document.getElementById('loteCreation');
+        if (loteCreation) {
+            const today = new Date().toISOString().split('T')[0];
+            loteCreation.value = today;
+        }
+        
         const loteModalTitle = document.getElementById('loteModalTitle');
         if (loteModalTitle) loteModalTitle.textContent = 'Adicionar Lote';
         
@@ -1115,6 +1238,12 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 loteExpiry.value = expiryDate.toISOString().split('T')[0];
             }
             
+            // ADICIONAR CAMPO PARA DATA DE CRIAÇÃO (readonly)
+            const loteCreation = document.getElementById('loteCreation');
+            if (loteCreation && lote.creationDate) {
+                loteCreation.value = lote.creationDate;
+            }
+            
             const loteModalTitle = document.getElementById('loteModalTitle');
             if (loteModalTitle) loteModalTitle.textContent = 'Editar Lote';
             
@@ -1138,23 +1267,30 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         if (modalOverlay) modalOverlay.classList.remove('active');
     }
 
+    // MODIFICADO: Adicionar data de criação automaticamente
     addLote(loteData) {
         const lote = {
             number: loteData.number,
             quantity: parseFloat(loteData.quantity),
-            expiry: loteData.expiry
+            expiry: loteData.expiry,
+            // ADICIONAR DATA DE CRIAÇÃO AUTOMATICAMENTE
+            creationDate: new Date().toISOString().split('T')[0] // Data atual no formato YYYY-MM-DD
         };
         
         this.currentLotes.push(lote);
         this.renderLotes();
     }
 
+    // MODIFICADO: Preservar data de criação existente
     editLote(index, loteData) {
         if (index >= 0 && index < this.currentLotes.length) {
+            const existingLote = this.currentLotes[index];
             this.currentLotes[index] = {
                 number: loteData.number,
                 quantity: parseFloat(loteData.quantity),
-                expiry: loteData.expiry
+                expiry: loteData.expiry,
+                // PRESERVAR DATA DE CRIAÇÃO EXISTENTE OU CRIAR NOVA
+                creationDate: existingLote.creationDate || new Date().toISOString().split('T')[0]
             };
             this.renderLotes();
         }
@@ -1167,6 +1303,7 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         }
     }
 
+    // MODIFICADO: Incluir data de criação na renderização
     renderLotes() {
         const lotesList = document.getElementById('lotesList');
         if (lotesList) {
@@ -1175,15 +1312,25 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
             } else {
                 lotesList.innerHTML = this.currentLotes.map((lote, index) => {
                     const expiryStatus = this.getExpiryStatus(lote.expiry);
+                    // FORMATAR DATA DE CRIAÇÃO PARA EXIBIÇÃO
+                    const creationDate = lote.creationDate ? 
+                        new Date(lote.creationDate).toLocaleDateString('pt-BR') : 
+                        'Data não informada';
+                    
                     return `
                         <div class="lote-item">
                             <div class="lote-info">
                                 <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
                                 <div class="lote-quantity">Quantidade: ${this.formatNumber(lote.quantity)}</div>
                             </div>
-                            <div class="lote-expiry">
-                                <div class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</div>
-                                <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
+                            <div class="lote-dates">
+                                <div class="lote-creation-date">
+                                    <small>Criado em: ${creationDate}</small>
+                                </div>
+                                <div class="lote-expiry">
+                                    <div class="expiry-date">Validade: ${new Date(lote.expiry).toLocaleDateString('pt-BR')}</div>
+                                    <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
+                                </div>
                             </div>
                             <div class="lote-actions">
                                 <button type="button" class="btn-edit" onclick="window.inventorySystem.openEditLoteModal(${index})">Editar</button>
@@ -1227,6 +1374,23 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         }
         
         return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
+    }
+
+    getExpiryStatus(expiryDate) {
+        if (!expiryDate) return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
+        
+        const today = new Date();
+        const expiry = new Date(expiryDate);
+        const diffTime = expiry - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+            return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
+        } else if (diffDays <= 90) {
+            return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
+        } else {
+            return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
+        }
     }
 
     // ===================== Tab Management =====================
@@ -1275,7 +1439,9 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
             local: productData.local,
             description: productData.description || '',
             lotes: [...this.currentLotes],
-            lastUpdated: new Date().toLocaleDateString("pt-BR")
+            lastUpdated: new Date().toLocaleDateString("pt-BR"),
+            // ADICIONAR DATA DE CRIAÇÃO
+            createdAt: new Date().toISOString()
         };
 
         this.products.push(product);
@@ -1324,23 +1490,7 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         this.populateLocationFilter();
     }
 
-    getExpiryStatus(expiryDate) {
-        if (!expiryDate) return { status: 'sem-data', label: 'Sem data', class: 'expiry-sem-data' };
-        
-        const today = new Date();
-        const expiry = new Date(expiryDate);
-        const diffTime = expiry - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays < 0) {
-            return { status: 'vencido', label: 'Vencido', class: 'expiry-vencido' };
-        } else if (diffDays <= 90) {
-            return { status: 'atencao', label: 'Atenção', class: 'expiry-atencao' };
-        } else {
-            return { status: 'conforme', label: 'Conforme', class: 'expiry-conforme' };
-        }
-    }
-
+    // MODIFICADO: Incluir data de lançamento e informações de lotes com data de criação
     render() {
         const productsList = document.getElementById("productsList");
         const emptyState = document.getElementById("emptyState");
@@ -1364,11 +1514,17 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         }
     }
 
+    // MODIFICADO: Incluir data de lançamento e informações de data dos lotes
     createProductHTML(product) {
         const isAdmOrSubAdm = this.userRole === 'admin' || this.userRole === 'subadm';
         const quantity = product.quantity ?? 0;
         const quantityClass = quantity < 100 ? 'quantity-low' : quantity < 500 ? 'quantity-medium' : 'quantity-high';
         const expiryStatus = this.getProductExpiryStatus(product.lotes);
+        
+        // OBTER DATA DE LANÇAMENTO
+        const launchDate = product.lastUpdated || 
+                          product.createdAt ? new Date(product.createdAt).toLocaleDateString('pt-BR') : 
+                          new Date().toLocaleDateString('pt-BR');
         
         return `
         <div class="product-item" data-id="${product.id}">
@@ -1394,16 +1550,16 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                     <div class="product-detail-value">${this.escapeHtml(product.local ?? '')}</div>
                 </div>
                 <div class="product-detail">
+                    <div class="product-detail-label">Data de Lançamento</div>
+                    <div class="product-detail-value launch-date">${launchDate}</div>
+                </div>
+                <div class="product-detail">
                     <div class="product-detail-label">Status Validade</div>
                     <div class="product-detail-value">
                         <span class="expiry-status ${expiryStatus.class}">
                             ${expiryStatus.label}
                         </span>
                     </div>
-                </div>
-                <div class="product-detail">
-                    <div class="product-detail-label">Última Atualização</div>
-                    <div class="product-detail-value">${this.escapeHtml(product.lastUpdated ?? '')}</div>
                 </div>
                 ${product.description ? `
                 <div class="product-detail">
@@ -1418,12 +1574,17 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 <div class="lote-summary">
                     ${product.lotes.map(lote => {
                         const loteExpiryStatus = this.getExpiryStatus(lote.expiry);
+                        const creationDate = lote.creationDate ? 
+                            new Date(lote.creationDate).toLocaleDateString('pt-BR') : 
+                            'Data não informada';
+                        
                         return `
                             <div class="lote-badge">
                                 <span class="lote-number">${this.escapeHtml(lote.number)}</span>
                                 <span class="lote-quantity">${this.formatNumber(lote.quantity)}</span>
+                                <span class="lote-creation">Criado: ${creationDate}</span>
                                 <span class="expiry-badge ${loteExpiryStatus.class}">${loteExpiryStatus.label}</span>
-                                <small>${new Date(lote.expiry).toLocaleDateString('pt-BR')}</small>
+                                <small>Validade: ${new Date(lote.expiry).toLocaleDateString('pt-BR')}</small>
                             </div>
                         `;
                     }).join('')}
@@ -1641,103 +1802,104 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
 
     // ===================== Requisition Management =====================
     async generateRequisition(event) {
-    event.preventDefault();
-    
-    if (this.selectedProductsForRequisition.length === 0) {
-        alert('Selecione pelo menos um produto para a requisição.');
-        return;
-    }
-
-    // Verificar se todos os produtos têm lotes selecionados
-    for (const product of this.selectedProductsForRequisition) {
-        if (!product.selectedLotes || product.selectedLotes.length === 0) {
-            alert(`Por favor, selecione os lotes para o produto: ${product.name}`);
-            return;
-        }
+        event.preventDefault();
         
-        const totalRequested = product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0);
-        if (totalRequested <= 0) {
-            alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
+        if (this.selectedProductsForRequisition.length === 0) {
+            alert('Selecione pelo menos um produto para a requisição.');
             return;
         }
-        
-        if (totalRequested > product.availableQuantity) {
-            alert(`Quantidade requisitada (${this.formatNumber(totalRequested)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
-            return;
+
+        // Verificar se todos os produtos têm lotes selecionados
+        for (const product of this.selectedProductsForRequisition) {
+            if (!product.selectedLotes || product.selectedLotes.length === 0) {
+                alert(`Por favor, selecione os lotes para o produto: ${product.name}`);
+                return;
+            }
+            
+            const totalRequested = product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0);
+            if (totalRequested <= 0) {
+                alert(`Por favor, informe a quantidade para o produto: ${product.name}`);
+                return;
+            }
+            
+            if (totalRequested > product.availableQuantity) {
+                alert(`Quantidade requisitada (${this.formatNumber(totalRequested)}) excede o estoque disponível (${this.formatNumber(product.availableQuantity)}) para o produto: ${product.name}`);
+                return;
+            }
         }
-    }
 
-    const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
-        sum + product.selectedLotes.reduce((loteSum, lote) => loteSum + lote.quantity, 0), 0
-    );
+        const totalRequested = this.selectedProductsForRequisition.reduce((sum, product) => 
+            sum + product.selectedLotes.reduce((loteSum, lote) => loteSum + lote.quantity, 0), 0
+        );
 
-    const requisition = {
-        id: Date.now().toString(),
-        products: this.selectedProductsForRequisition.map(product => ({
-            id: product.id,
-            name: product.name || '',
-            code: product.code || '',
-            setor: product.local || '',
-            requestedQuantity: product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0),
-            availableQuantity: product.availableQuantity || 0,
-            selectedLotes: product.selectedLotes.map(lote => ({
-                loteNumber: lote.loteNumber,
-                quantity: lote.quantity,
-                expiry: lote.expiry
+        const requisition = {
+            id: Date.now().toString(),
+            products: this.selectedProductsForRequisition.map(product => ({
+                id: product.id,
+                name: product.name || '',
+                code: product.code || '',
+                setor: product.local || '',
+                requestedQuantity: product.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0),
+                availableQuantity: product.availableQuantity || 0,
+                selectedLotes: product.selectedLotes.map(lote => ({
+                    loteNumber: lote.loteNumber,
+                    quantity: lote.quantity,
+                    expiry: lote.expiry,
+                    creationDate: lote.creationDate // INCLUIR DATA DE CRIAÇÃO DO LOTE
+                })),
+                expiry: product.expiry || null
             })),
-            expiry: product.expiry || null
-        })),
-        totalRequested: totalRequested,
-        status: 'Pendente',
-        createdAt: new Date().toISOString(),
-        createdBy: this.currentUser?.email || 'Sistema',
-        description: document.getElementById('requisitionDescription')?.value || '',
-        local: document.getElementById('requisitionLocal')?.value || ''
-    };
+            totalRequested: totalRequested,
+            status: 'Pendente',
+            createdAt: new Date().toISOString(),
+            createdBy: this.currentUser?.email || 'Sistema',
+            description: document.getElementById('requisitionDescription')?.value || '',
+            local: document.getElementById('requisitionLocal')?.value || ''
+        };
 
-    // ATUALIZAR ESTOQUE - DEDUZIR DOS LOTES SELECIONADOS
-    for (const reqProduct of requisition.products) {
-        const productIndex = this.products.findIndex(p => p.id === reqProduct.id);
-        if (productIndex !== -1) {
-            const product = this.products[productIndex];
-            
-            // Deduzir dos lotes específicos
-            reqProduct.selectedLotes.forEach(selectedLote => {
-                const loteIndex = product.lotes.findIndex(l => l.number === selectedLote.loteNumber);
-                if (loteIndex !== -1) {
-                    product.lotes[loteIndex].quantity -= selectedLote.quantity;
-                    if (product.lotes[loteIndex].quantity < 0) {
-                        product.lotes[loteIndex].quantity = 0;
+        // ATUALIZAR ESTOQUE - DEDUZIR DOS LOTES SELECIONADOS
+        for (const reqProduct of requisition.products) {
+            const productIndex = this.products.findIndex(p => p.id === reqProduct.id);
+            if (productIndex !== -1) {
+                const product = this.products[productIndex];
+                
+                // Deduzir dos lotes específicos
+                reqProduct.selectedLotes.forEach(selectedLote => {
+                    const loteIndex = product.lotes.findIndex(l => l.number === selectedLote.loteNumber);
+                    if (loteIndex !== -1) {
+                        product.lotes[loteIndex].quantity -= selectedLote.quantity;
+                        if (product.lotes[loteIndex].quantity < 0) {
+                            product.lotes[loteIndex].quantity = 0;
+                        }
                     }
-                }
-            });
-            
-            // Recalcular quantidade total do produto
-            product.quantity = product.lotes.reduce((sum, lote) => sum + lote.quantity, 0);
-            
-            // Atualizar no Firestore
-            await this.saveToFirestore(product);
+                });
+                
+                // Recalcular quantidade total do produto
+                product.quantity = product.lotes.reduce((sum, lote) => sum + lote.quantity, 0);
+                
+                // Atualizar no Firestore
+                await this.saveToFirestore(product);
+            }
         }
+
+        Object.keys(requisition).forEach(key => {
+            if (requisition[key] === undefined) {
+                delete requisition[key];
+            }
+        });
+
+        this.requisitions.push(requisition);
+        await this.saveRequisitionToFirestore(requisition);
+        this.renderRequisitions();
+        this.render(); // Atualizar lista de produtos
+        this.updateDashboard();
+
+        this.selectedProductsForRequisition = [];
+        this.updateSelectedProductsDisplay();
+        this.closeRequisitionModal();
+
+        alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
     }
-
-    Object.keys(requisition).forEach(key => {
-        if (requisition[key] === undefined) {
-            delete requisition[key];
-        }
-    });
-
-    this.requisitions.push(requisition);
-    await this.saveRequisitionToFirestore(requisition);
-    this.renderRequisitions();
-    this.render(); // Atualizar lista de produtos
-    this.updateDashboard();
-
-    this.selectedProductsForRequisition = [];
-    this.updateSelectedProductsDisplay();
-    this.closeRequisitionModal();
-
-    alert(`Requisição gerada com sucesso! Total requisitado: ${this.formatNumber(totalRequested)} itens.`);
-}
 
     renderRequisitions() {
         const requisitionsList = document.getElementById("requisitionsList");
@@ -1797,6 +1959,17 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                                             <span class="expiry-status ${expiryStatus.class}">
                                                 ${expiryStatus.label}
                                             </span>
+                                        ` : ''}
+                                        ${product.selectedLotes && product.selectedLotes.length > 0 ? `
+                                            <div class="selected-lotes-display">
+                                                <strong>Lotes utilizados:</strong>
+                                                ${product.selectedLotes.map(lote => `
+                                                    <div class="selected-lote-mini">
+                                                        <span>Lote ${lote.loteNumber}: ${this.formatNumber(lote.quantity)} un.</span>
+                                                        <small>Criado: ${lote.creationDate ? new Date(lote.creationDate).toLocaleDateString('pt-BR') : 'N/A'}</small>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
                                         ` : ''}
                                     </div>
                                 </div>
@@ -1909,7 +2082,8 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 local: p.setor,
                 availableQuantity: p.availableQuantity,
                 requestedQuantity: p.requestedQuantity,
-                expiry: p.expiry
+                expiry: p.expiry,
+                selectedLotes: p.selectedLotes || []
             }));
             this.updateSelectedProductsDisplay();
             
@@ -1946,7 +2120,8 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
                 setor: p.local,
                 requestedQuantity: p.requestedQuantity,
                 availableQuantity: p.availableQuantity,
-                expiry: p.expiry
+                expiry: p.expiry,
+                selectedLotes: p.selectedLotes || []
             }));
             existingRequisition.totalRequested = this.selectedProductsForRequisition.reduce((sum, p) => sum + (p.requestedQuantity || 0), 0);
 
@@ -1977,98 +2152,99 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         if (modalOverlay) modalOverlay.classList.remove('active');
     }
 
-   populateAvailableProducts() {
-    const availableProductsList = document.getElementById('availableProductsList');
-    const locationFilter = document.getElementById('locationFilter');
-    
-    if (availableProductsList) {
-        this.updateLocationFilterInModal();
+    populateAvailableProducts() {
+        const availableProductsList = document.getElementById('availableProductsList');
+        const locationFilter = document.getElementById('locationFilter');
         
-        const selectedLocation = locationFilter ? locationFilter.value : '';
-        const filteredProducts = selectedLocation ? 
-            this.products.filter(product => product.local === selectedLocation) : 
-            this.products;
-        
-        availableProductsList.innerHTML = filteredProducts.map(product => {
-            const expiryStatus = this.getProductExpiryStatus(product.lotes);
-            const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
+        if (availableProductsList) {
+            this.updateLocationFilterInModal();
             
-            return `
-            <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}">
-                <div class="available-product-info">
-                    <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
-                    <div class="available-product-details">
-                        <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
-                        <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
-                        <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
-                        <div>Lotes: ${product.lotes?.length || 0} disponíveis</div>
-                        <div>Status Validade: 
-                            <span class="expiry-status ${expiryStatus.class}">
-                                ${expiryStatus.label}
-                            </span>
+            const selectedLocation = locationFilter ? locationFilter.value : '';
+            const filteredProducts = selectedLocation ? 
+                this.products.filter(product => product.local === selectedLocation) : 
+                this.products;
+            
+            availableProductsList.innerHTML = filteredProducts.map(product => {
+                const expiryStatus = this.getProductExpiryStatus(product.lotes);
+                const isSelected = this.selectedProductsForRequisition.some(p => p.id === product.id);
+                
+                return `
+                <div class="available-product-item ${isSelected ? 'selected' : ''}" data-product-id="${product.id}">
+                    <div class="available-product-info">
+                        <div class="available-product-name">${this.escapeHtml(product.name ?? '')}</div>
+                        <div class="available-product-details">
+                            <div>Código: ${this.escapeHtml(product.code ?? '')}</div>
+                            <div>Setor: ${this.escapeHtml(product.local ?? '')}</div>
+                            <div>Estoque: <strong>${this.formatNumber(product.quantity ?? 0)}</strong></div>
+                            <div>Lotes: ${product.lotes?.length || 0} disponíveis</div>
+                            <div>Status Validade: 
+                                <span class="expiry-status ${expiryStatus.class}">
+                                    ${expiryStatus.label}
+                                </span>
+                            </div>
+                            <div>Data de Lançamento: ${product.lastUpdated || 'N/A'}</div>
                         </div>
                     </div>
+                    <div class="product-selection-controls">
+                        <button type="button" class="btn-secondary select-lotes-btn" 
+                                data-product-id="${product.id}">
+                            Selecionar Lotes
+                        </button>
+                        <input type="checkbox" 
+                               class="product-checkbox" 
+                               value="${product.id}" 
+                               ${isSelected ? 'checked' : ''}>
+                    </div>
                 </div>
-                <div class="product-selection-controls">
-                    <button type="button" class="btn-secondary select-lotes-btn" 
-                            data-product-id="${product.id}">
-                        Selecionar Lotes
-                    </button>
-                    <input type="checkbox" 
-                           class="product-checkbox" 
-                           value="${product.id}" 
-                           ${isSelected ? 'checked' : ''}>
-                </div>
-            </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
 
-        // EVENT LISTENER PARA OS BOTÕES "SELECIONAR LOTES"
-        availableProductsList.querySelectorAll('.select-lotes-btn').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const productId = e.target.dataset.productId;
-                const product = this.products.find(p => p.id === productId);
-                if (product) {
-                    console.log('Abrindo seleção de lotes para:', product.name);
-                    this.openLoteSelectionModal(product);
-                }
-            });
-        });
-
-        // Event listener para os checkboxes
-        availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', (e) => {
-                const productId = e.target.value;
-                const productItem = e.target.closest('.available-product-item');
-                
-                if (e.target.checked) {
-                    productItem.classList.add('selected');
-                    // Marcar como selecionado, mas esperar a seleção de lotes
+            // EVENT LISTENER PARA OS BOTÕES "SELECIONAR LOTES"
+            availableProductsList.querySelectorAll('.select-lotes-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const productId = e.target.dataset.productId;
                     const product = this.products.find(p => p.id === productId);
-                    if (product && !this.selectedProductsForRequisition.some(p => p.id === productId)) {
-                        // Adicionar com lotes vazios por enquanto
-                        this.selectedProductsForRequisition.push({
-                            id: product.id,
-                            name: product.name,
-                            code: product.code,
-                            local: product.local,
-                            availableQuantity: product.quantity,
-                            requestedQuantity: 0,
-                            selectedLotes: []
-                        });
+                    if (product) {
+                        console.log('Abrindo seleção de lotes para:', product.name);
+                        this.openLoteSelectionModal(product);
                     }
-                } else {
-                    productItem.classList.remove('selected');
-                    // Remover da lista de selecionados
-                    this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(
-                        p => p.id !== productId
-                    );
-                    this.updateSelectedProductsDisplay();
-                }
+                });
             });
-        });
+
+            // Event listener para os checkboxes
+            availableProductsList.querySelectorAll('.product-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const productId = e.target.value;
+                    const productItem = e.target.closest('.available-product-item');
+                    
+                    if (e.target.checked) {
+                        productItem.classList.add('selected');
+                        // Marcar como selecionado, mas esperar a seleção de lotes
+                        const product = this.products.find(p => p.id === productId);
+                        if (product && !this.selectedProductsForRequisition.some(p => p.id === productId)) {
+                            // Adicionar com lotes vazios por enquanto
+                            this.selectedProductsForRequisition.push({
+                                id: product.id,
+                                name: product.name,
+                                code: product.code,
+                                local: product.local,
+                                availableQuantity: product.quantity,
+                                requestedQuantity: 0,
+                                selectedLotes: []
+                            });
+                        }
+                    } else {
+                        productItem.classList.remove('selected');
+                        // Remover da lista de selecionados
+                        this.selectedProductsForRequisition = this.selectedProductsForRequisition.filter(
+                            p => p.id !== productId
+                        );
+                        this.updateSelectedProductsDisplay();
+                    }
+                });
+            });
+        }
     }
-}
 
     updateLocationFilterInModal() {
         const locationFilter = document.getElementById('locationFilter');
@@ -2089,98 +2265,99 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
     }
 
     confirmProductSelection() {
-    console.log('✅ confirmProductSelection chamado');
-    
-    const selectedCheckboxes = document.querySelectorAll('#availableProductsList .product-checkbox:checked');
-    console.log('Checkboxes selecionados:', selectedCheckboxes.length);
-    
-    this.selectedProductsForRequisition = [];
-    
-    selectedCheckboxes.forEach(checkbox => {
-        const productId = checkbox.value;
-        const productItem = checkbox.closest('.available-product-item');
-        const product = this.products.find(p => p.id === productId);
+        console.log('✅ confirmProductSelection chamado');
         
-        console.log('Processando produto:', productId, product);
+        const selectedCheckboxes = document.querySelectorAll('#availableProductsList .product-checkbox:checked');
+        console.log('Checkboxes selecionados:', selectedCheckboxes.length);
         
-        if (product) {
-            // Obter quantidade do input (se existir)
-            const quantityInput = productItem.querySelector('.request-quantity-input');
-            const requestedQuantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
+        this.selectedProductsForRequisition = [];
+        
+        selectedCheckboxes.forEach(checkbox => {
+            const productId = checkbox.value;
+            const productItem = checkbox.closest('.available-product-item');
+            const product = this.products.find(p => p.id === productId);
             
-            this.selectedProductsForRequisition.push({
-                id: product.id,
-                name: product.name,
-                code: product.code,
-                local: product.local,
-                availableQuantity: product.quantity,
-                requestedQuantity: requestedQuantity,
-                expiry: product.expiry,
-                selectedLotes: [] // Inicializar array vazio de lotes
-            });
-        }
-    });
+            console.log('Processando produto:', productId, product);
+            
+            if (product) {
+                // Obter quantidade do input (se existir)
+                const quantityInput = productItem.querySelector('.request-quantity-input');
+                const requestedQuantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
+                
+                this.selectedProductsForRequisition.push({
+                    id: product.id,
+                    name: product.name,
+                    code: product.code,
+                    local: product.local,
+                    availableQuantity: product.quantity,
+                    requestedQuantity: requestedQuantity,
+                    expiry: product.expiry,
+                    selectedLotes: [] // Inicializar array vazio de lotes
+                });
+            }
+        });
 
-    console.log('Produtos selecionados FINAL:', this.selectedProductsForRequisition);
-    this.updateSelectedProductsDisplay();
-    this.closeProductSelectionModal();
-}
+        console.log('Produtos selecionados FINAL:', this.selectedProductsForRequisition);
+        this.updateSelectedProductsDisplay();
+        this.closeProductSelectionModal();
+    }
 
     updateSelectedProductsDisplay() {
-    const selectedProductsDiv = document.getElementById("selectedProducts");
-    if (selectedProductsDiv) {
-        if (this.selectedProductsForRequisition.length === 0) {
-            selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
-        } else {
-            selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => {
-                const expiryStatus = this.getExpiryStatus(item.expiry);
-                
-                // Calcular quantidade total dos lotes selecionados
-                const totalRequested = item.selectedLotes ? 
-                    item.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0) : 
-                    item.requestedQuantity || 0;
-                
-                return `
-                    <div class="selected-product-item-detailed">
-                        <div class="selected-product-info-detailed">
-                            <div class="selected-product-name-detailed">${this.escapeHtml(item.name)}</div>
-                            <div class="selected-product-details">
-                                <div>Código: ${this.escapeHtml(item.code)}</div>
-                                <div>Setor: ${this.escapeHtml(item.local)}</div>
-                                <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
-                                <div>Status Validade: 
-                                    <span class="expiry-status ${expiryStatus.class}">
-                                        ${expiryStatus.label}
-                                    </span>
+        const selectedProductsDiv = document.getElementById("selectedProducts");
+        if (selectedProductsDiv) {
+            if (this.selectedProductsForRequisition.length === 0) {
+                selectedProductsDiv.innerHTML = "<p>Nenhum produto selecionado</p>";
+            } else {
+                selectedProductsDiv.innerHTML = this.selectedProductsForRequisition.map(item => {
+                    const expiryStatus = this.getExpiryStatus(item.expiry);
+                    
+                    // Calcular quantidade total dos lotes selecionados
+                    const totalRequested = item.selectedLotes ? 
+                        item.selectedLotes.reduce((sum, lote) => sum + lote.quantity, 0) : 
+                        item.requestedQuantity || 0;
+                    
+                    return `
+                        <div class="selected-product-item-detailed">
+                            <div class="selected-product-info-detailed">
+                                <div class="selected-product-name-detailed">${this.escapeHtml(item.name)}</div>
+                                <div class="selected-product-details">
+                                    <div>Código: ${this.escapeHtml(item.code)}</div>
+                                    <div>Setor: ${this.escapeHtml(item.local)}</div>
+                                    <div>Estoque: <strong>${this.formatNumber(item.availableQuantity)}</strong></div>
+                                    <div>Status Validade: 
+                                        <span class="expiry-status ${expiryStatus.class}">
+                                            ${expiryStatus.label}
+                                        </span>
+                                    </div>
+                                    ${item.selectedLotes && item.selectedLotes.length > 0 ? `
+                                    <div class="selected-lotes-display">
+                                        <strong>Lotes Selecionados:</strong>
+                                        ${item.selectedLotes.map(lote => `
+                                            <div class="selected-lote-mini">
+                                                <span>Lote ${lote.loteNumber}: ${this.formatNumber(lote.quantity)} un.</span>
+                                                <small>Criado: ${lote.creationDate ? new Date(lote.creationDate).toLocaleDateString('pt-BR') : 'N/A'}</small>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ` : ''}
                                 </div>
-                                ${item.selectedLotes && item.selectedLotes.length > 0 ? `
-                                <div class="selected-lotes-display">
-                                    <strong>Lotes Selecionados:</strong>
-                                    ${item.selectedLotes.map(lote => `
-                                        <div class="selected-lote-mini">
-                                            <span>Lote ${lote.loteNumber}: ${this.formatNumber(lote.quantity)} un.</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                                ` : ''}
                             </div>
+                            <div class="selected-product-quantity-detailed">
+                                <div class="quantity-label">Quantidade Total</div>
+                                <div class="total-quantity-display">${this.formatNumber(totalRequested)}</div>
+                                <small class="stock-info">Máx: ${this.formatNumber(item.availableQuantity)}</small>
+                                <button type="button" class="btn-secondary edit-lotes-btn" 
+                                        onclick="window.inventorySystem.editProductLotes('${item.id}')">
+                                    Editar Lotes
+                                </button>
+                            </div>
+                            <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${item.id}')">Remover</button>
                         </div>
-                        <div class="selected-product-quantity-detailed">
-                            <div class="quantity-label">Quantidade Total</div>
-                            <div class="total-quantity-display">${this.formatNumber(totalRequested)}</div>
-                            <small class="stock-info">Máx: ${this.formatNumber(item.availableQuantity)}</small>
-                            <button type="button" class="btn-secondary edit-lotes-btn" 
-                                    onclick="window.inventorySystem.editProductLotes('${item.id}')">
-                                Editar Lotes
-                            </button>
-                        </div>
-                        <button type="button" class="remove-product-btn-detailed" onclick="window.inventorySystem.removeSelectedProduct('${item.id}')">Remover</button>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            }
         }
     }
-}
 
     updateProductQuantity(productId, quantity) {
         const productIndex = this.selectedProductsForRequisition.findIndex(p => p.id === productId);
@@ -2331,28 +2508,28 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         const cancelLoteBtn = document.getElementById('cancelLoteBtn');
         if (cancelLoteBtn) cancelLoteBtn.addEventListener('click', () => this.closeLoteModal());
 
-      const confirmLoteSelectionBtn = document.getElementById('confirmLoteSelectionBtn');
-    if (confirmLoteSelectionBtn) {
-        confirmLoteSelectionBtn.addEventListener('click', () => {
-            console.log('Botão confirmar lotes clicado');
-            this.confirmLoteSelection();
-        });
-    }
-    
-    const cancelLoteSelectionBtn = document.getElementById('cancelLoteSelectionBtn');
-    if (cancelLoteSelectionBtn) {
-        cancelLoteSelectionBtn.addEventListener('click', () => {
-            console.log('Botão cancelar lotes clicado');
-            this.closeLoteSelectionModal();
-        });
-    }
-    
-    const closeLoteSelectionModal = document.getElementById('closeLoteSelectionModal');
-    if (closeLoteSelectionModal) {
-        closeLoteSelectionModal.addEventListener('click', () => {
-            this.closeLoteSelectionModal();
-        });
-    }
+        const confirmLoteSelectionBtn = document.getElementById('confirmLoteSelectionBtn');
+        if (confirmLoteSelectionBtn) {
+            confirmLoteSelectionBtn.addEventListener('click', () => {
+                console.log('Botão confirmar lotes clicado');
+                this.confirmLoteSelection();
+            });
+        }
+        
+        const cancelLoteSelectionBtn = document.getElementById('cancelLoteSelectionBtn');
+        if (cancelLoteSelectionBtn) {
+            cancelLoteSelectionBtn.addEventListener('click', () => {
+                console.log('Botão cancelar lotes clicado');
+                this.closeLoteSelectionModal();
+            });
+        }
+        
+        const closeLoteSelectionModal = document.getElementById('closeLoteSelectionModal');
+        if (closeLoteSelectionModal) {
+            closeLoteSelectionModal.addEventListener('click', () => {
+                this.closeLoteSelectionModal();
+            });
+        }
 
         const loteForm = document.getElementById('loteForm');
         if (loteForm) {
@@ -2627,285 +2804,307 @@ yPosition += 40; // Aumentei para 40 para acomodar as duas linhas
         return div.innerHTML;
     }
 
-  //----------------------------------------------
+    // ===================== SISTEMA DE SELEÇÃO DE LOTES =====================
 
-  // ===================== SISTEMA DE SELEÇÃO DE LOTES =====================
+    // Variáveis para controle da seleção de lotes
+    currentProductForLoteSelection = null;
+    selectedLotesForRequisition = [];
 
-// Variáveis para controle da seleção de lotes
-currentProductForLoteSelection = null;
-selectedLotesForRequisition = [];
-
-// ===================== SISTEMA DE SELEÇÃO DE LOTES =====================
-
-// Método para abrir a seleção de lotes
-openLoteSelectionModal(product) {
-    console.log('Abrindo modal de lotes para:', product.name);
-    
-    this.currentProductForLoteSelection = product;
-    this.selectedLotesForRequisition = [];
-    
-    // Preencher informações do produto
-    const productNameEl = document.getElementById('selectedProductName');
-    const productCodeEl = document.getElementById('selectedProductCode');
-    const totalAvailableEl = document.getElementById('totalAvailableQuantity');
-    
-    if (productNameEl) productNameEl.textContent = product.name;
-    if (productCodeEl) productCodeEl.textContent = `Código: ${product.code}`;
-    if (totalAvailableEl) totalAvailableEl.textContent = this.formatNumber(product.quantity);
-    
-    this.populateAvailableLotes(product);
-    this.updateLoteSelectionSummary();
-    
-    // Abrir modal
-    const modal = document.getElementById('loteSelectionModal');
-    const modalOverlay = document.getElementById('modalOverlay');
-    if (modal && modalOverlay) {
-        modal.classList.add('active');
-        modalOverlay.classList.add('active');
-        console.log('Modal de lotes aberto');
-    } else {
-        console.error('Elementos do modal não encontrados');
-    }
-}
-
-// Popular lotes disponíveis
-populateAvailableLotes(product) {
-    const availableLotesList = document.getElementById('availableLotesList');
-    if (!availableLotesList) return;
-    
-    if (!product.lotes || product.lotes.length === 0) {
-        availableLotesList.innerHTML = `
-            <div class="empty-lotes">
-                <p>Nenhum lote disponível para este produto.</p>
-                <p>Quantidade total: ${this.formatNumber(product.quantity)}</p>
-            </div>
-        `;
-        return;
-    }
-    
-    // Filtrar apenas lotes com quantidade disponível
-    const availableLotes = product.lotes.filter(lote => lote.quantity > 0);
-    
-    if (availableLotes.length === 0) {
-        availableLotesList.innerHTML = `
-            <div class="empty-lotes">
-                <p>Todos os lotes estão com quantidade zero.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    availableLotesList.innerHTML = availableLotes.map((lote, index) => {
-        const expiryStatus = this.getExpiryStatus(lote.expiry);
-        const isSelected = this.selectedLotesForRequisition.some(selected => 
-            selected.loteIndex === index
-        );
-        const selectedQuantity = isSelected ? 
-            this.selectedLotesForRequisition.find(selected => selected.loteIndex === index).quantity : 0;
+    // Método para abrir a seleção de lotes
+    openLoteSelectionModal(product) {
+        console.log('Abrindo modal de lotes para:', product.name);
         
-        return `
-            <div class="lote-selection-item ${isSelected ? 'selected' : ''}" data-lote-index="${index}">
-                <div class="lote-selection-info">
-                    <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
-                    <div class="lote-details">
-                        <span class="lote-quantity">Disponível: ${this.formatNumber(lote.quantity)}</span>
-                        <span class="expiry-date">Validade: ${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
-                        <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
-                    </div>
-                </div>
-                <div class="lote-selection-controls">
-                    <div class="quantity-selection">
-                        <label>Quantidade a usar:</label>
-                        <input type="number" 
-                               class="lote-quantity-input" 
-                               data-lote-index="${index}"
-                               min="0" 
-                               max="${lote.quantity}"
-                               value="${selectedQuantity}"
-                               ${!isSelected ? 'disabled' : ''}>
-                        <small>Máx: ${this.formatNumber(lote.quantity)}</small>
-                    </div>
-                    <div class="lote-checkbox">
-                        <input type="checkbox" 
-                               class="lote-selection-checkbox" 
-                               data-lote-index="${index}"
-                               ${isSelected ? 'checked' : ''}>
-                        <label>Selecionar</label>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    // Adicionar event listeners
-    this.setupLoteSelectionEvents();
-}
-
-// Configurar eventos da seleção de lotes
-setupLoteSelectionEvents() {
-    // Checkboxes de seleção
-    document.querySelectorAll('.lote-selection-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', (e) => {
-            const loteIndex = parseInt(e.target.dataset.loteIndex);
-            const loteItem = e.target.closest('.lote-selection-item');
-            const quantityInput = loteItem.querySelector('.lote-quantity-input');
-            
-            if (e.target.checked) {
-                loteItem.classList.add('selected');
-                quantityInput.disabled = false;
-                quantityInput.value = 1;
-                quantityInput.focus();
-                
-                // Adicionar ao array de seleção
-                const product = this.currentProductForLoteSelection;
-                const lote = product.lotes[loteIndex];
-                this.selectedLotesForRequisition.push({
-                    loteIndex: loteIndex,
-                    loteNumber: lote.number,
-                    quantity: 1,
-                    maxQuantity: lote.quantity,
-                    expiry: lote.expiry
-                });
-            } else {
-                loteItem.classList.remove('selected');
-                quantityInput.disabled = true;
-                quantityInput.value = 0;
-                
-                // Remover do array de seleção
-                this.selectedLotesForRequisition = this.selectedLotesForRequisition.filter(
-                    selected => selected.loteIndex !== loteIndex
-                );
-            }
-            
-            this.updateLoteSelectionSummary();
-        });
-    });
-    
-    // Inputs de quantidade
-    document.querySelectorAll('.lote-quantity-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const loteIndex = parseInt(e.target.dataset.loteIndex);
-            const quantity = parseInt(e.target.value) || 0;
-            const maxQuantity = parseInt(e.target.max);
-            
-            if (quantity > maxQuantity) {
-                alert(`Quantidade não pode exceder o disponível no lote: ${this.formatNumber(maxQuantity)}`);
-                e.target.value = maxQuantity;
-                this.updateLoteSelection(loteIndex, maxQuantity);
-            } else if (quantity < 0) {
-                e.target.value = 0;
-                this.updateLoteSelection(loteIndex, 0);
-            } else {
-                this.updateLoteSelection(loteIndex, quantity);
-            }
-            
-            this.updateLoteSelectionSummary();
-        });
-    });
-}
-
-// Atualizar quantidade selecionada de um lote
-updateLoteSelection(loteIndex, quantity) {
-    const selectedLote = this.selectedLotesForRequisition.find(
-        selected => selected.loteIndex === loteIndex
-    );
-    
-    if (selectedLote) {
-        selectedLote.quantity = quantity;
+        this.currentProductForLoteSelection = product;
+        this.selectedLotesForRequisition = [];
+        
+        // Preencher informações do produto
+        const productNameEl = document.getElementById('selectedProductName');
+        const productCodeEl = document.getElementById('selectedProductCode');
+        const totalAvailableEl = document.getElementById('totalAvailableQuantity');
+        
+        if (productNameEl) productNameEl.textContent = product.name;
+        if (productCodeEl) productCodeEl.textContent = `Código: ${product.code}`;
+        if (totalAvailableEl) totalAvailableEl.textContent = this.formatNumber(product.quantity);
+        
+        this.populateAvailableLotes(product);
+        this.updateLoteSelectionSummary();
+        
+        // Abrir modal
+        const modal = document.getElementById('loteSelectionModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        if (modal && modalOverlay) {
+            modal.classList.add('active');
+            modalOverlay.classList.add('active');
+            console.log('Modal de lotes aberto');
+        } else {
+            console.error('Elementos do modal não encontrados');
+        }
     }
-}
 
-// Atualizar resumo da seleção
-updateLoteSelectionSummary() {
-    const summaryDiv = document.getElementById('selectedLotesSummary');
-    const totalSpan = document.getElementById('totalSelectedQuantity');
-    
-    if (!summaryDiv || !totalSpan) return;
-    
-    const totalSelected = this.selectedLotesForRequisition.reduce(
-        (sum, selected) => sum + selected.quantity, 0
-    );
-    
-    totalSpan.textContent = this.formatNumber(totalSelected);
-    
-    if (this.selectedLotesForRequisition.length === 0) {
-        summaryDiv.innerHTML = 'Nenhum lote selecionado';
-    } else {
-        summaryDiv.innerHTML = this.selectedLotesForRequisition.map(selected => {
-            const lote = this.currentProductForLoteSelection.lotes[selected.loteIndex];
+    // Popular lotes disponíveis
+    populateAvailableLotes(product) {
+        const availableLotesList = document.getElementById('availableLotesList');
+        if (!availableLotesList) return;
+        
+        if (!product.lotes || product.lotes.length === 0) {
+            availableLotesList.innerHTML = `
+                <div class="empty-lotes">
+                    <p>Nenhum lote disponível para este produto.</p>
+                    <p>Quantidade total: ${this.formatNumber(product.quantity)}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Filtrar apenas lotes com quantidade disponível
+        const availableLotes = product.lotes.filter(lote => lote.quantity > 0);
+        
+        if (availableLotes.length === 0) {
+            availableLotesList.innerHTML = `
+                <div class="empty-lotes">
+                    <p>Todos os lotes estão com quantidade zero.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        availableLotesList.innerHTML = availableLotes.map((lote, index) => {
+            const expiryStatus = this.getExpiryStatus(lote.expiry);
+            const isSelected = this.selectedLotesForRequisition.some(selected => 
+                selected.loteIndex === index
+            );
+            const selectedQuantity = isSelected ? 
+                this.selectedLotesForRequisition.find(selected => selected.loteIndex === index).quantity : 0;
+            
+            // FORMATAR DATA DE CRIAÇÃO
+            const creationDate = lote.creationDate ? 
+                new Date(lote.creationDate).toLocaleDateString('pt-BR') : 
+                'Data não informada';
+            
             return `
-                <div class="selected-lote-item">
-                    <span class="lote-number">${selected.loteNumber}</span>
-                    <span class="lote-quantity">${this.formatNumber(selected.quantity)}</span>
-                    <span class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
+                <div class="lote-selection-item ${isSelected ? 'selected' : ''}" data-lote-index="${index}">
+                    <div class="lote-selection-info">
+                        <div class="lote-number">Lote: ${this.escapeHtml(lote.number)}</div>
+                        <div class="lote-details">
+                            <span class="lote-quantity">Disponível: ${this.formatNumber(lote.quantity)}</span>
+                            <span class="expiry-date">Validade: ${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
+                            <span class="lote-creation">Criado: ${creationDate}</span>
+                            <span class="expiry-badge ${expiryStatus.class}">${expiryStatus.label}</span>
+                        </div>
+                    </div>
+                    <div class="lote-selection-controls">
+                        <div class="quantity-selection">
+                            <label>Quantidade a usar:</label>
+                            <input type="number" 
+                                   class="lote-quantity-input" 
+                                   data-lote-index="${index}"
+                                   min="0" 
+                                   max="${lote.quantity}"
+                                   value="${selectedQuantity}"
+                                   ${!isSelected ? 'disabled' : ''}>
+                            <small>Máx: ${this.formatNumber(lote.quantity)}</small>
+                        </div>
+                        <div class="lote-checkbox">
+                            <input type="checkbox" 
+                                   class="lote-selection-checkbox" 
+                                   data-lote-index="${index}"
+                                   ${isSelected ? 'checked' : ''}>
+                            <label>Selecionar</label>
+                        </div>
+                    </div>
                 </div>
             `;
         }).join('');
+        
+        // Adicionar event listeners
+        this.setupLoteSelectionEvents();
+    }
+
+    // Configurar eventos da seleção de lotes
+    setupLoteSelectionEvents() {
+        // Checkboxes de seleção
+        document.querySelectorAll('.lote-selection-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const loteIndex = parseInt(e.target.dataset.loteIndex);
+                const loteItem = e.target.closest('.lote-selection-item');
+                const quantityInput = loteItem.querySelector('.lote-quantity-input');
+                
+                if (e.target.checked) {
+                    loteItem.classList.add('selected');
+                    quantityInput.disabled = false;
+                    quantityInput.value = 1;
+                    quantityInput.focus();
+                    
+                    // Adicionar ao array de seleção
+                    const product = this.currentProductForLoteSelection;
+                    const lote = product.lotes[loteIndex];
+                    this.selectedLotesForRequisition.push({
+                        loteIndex: loteIndex,
+                        loteNumber: lote.number,
+                        quantity: 1,
+                        maxQuantity: lote.quantity,
+                        expiry: lote.expiry,
+                        creationDate: lote.creationDate // INCLUIR DATA DE CRIAÇÃO
+                    });
+                } else {
+                    loteItem.classList.remove('selected');
+                    quantityInput.disabled = true;
+                    quantityInput.value = 0;
+                    
+                    // Remover do array de seleção
+                    this.selectedLotesForRequisition = this.selectedLotesForRequisition.filter(
+                        selected => selected.loteIndex !== loteIndex
+                    );
+                }
+                
+                this.updateLoteSelectionSummary();
+            });
+        });
+        
+        // Inputs de quantidade
+        document.querySelectorAll('.lote-quantity-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const loteIndex = parseInt(e.target.dataset.loteIndex);
+                const quantity = parseInt(e.target.value) || 0;
+                const maxQuantity = parseInt(e.target.max);
+                
+                if (quantity > maxQuantity) {
+                    alert(`Quantidade não pode exceder o disponível no lote: ${this.formatNumber(maxQuantity)}`);
+                    e.target.value = maxQuantity;
+                    this.updateLoteSelection(loteIndex, maxQuantity);
+                } else if (quantity < 0) {
+                    e.target.value = 0;
+                    this.updateLoteSelection(loteIndex, 0);
+                } else {
+                    this.updateLoteSelection(loteIndex, quantity);
+                }
+                
+                this.updateLoteSelectionSummary();
+            });
+        });
+    }
+
+    // Atualizar quantidade selecionada de um lote
+    updateLoteSelection(loteIndex, quantity) {
+        const selectedLote = this.selectedLotesForRequisition.find(
+            selected => selected.loteIndex === loteIndex
+        );
+        
+        if (selectedLote) {
+            selectedLote.quantity = quantity;
+        }
+    }
+
+    // Atualizar resumo da seleção
+    updateLoteSelectionSummary() {
+        const summaryDiv = document.getElementById('selectedLotesSummary');
+        const totalSpan = document.getElementById('totalSelectedQuantity');
+        
+        if (!summaryDiv || !totalSpan) return;
+        
+        const totalSelected = this.selectedLotesForRequisition.reduce(
+            (sum, selected) => sum + selected.quantity, 0
+        );
+        
+        totalSpan.textContent = this.formatNumber(totalSelected);
+        
+        if (this.selectedLotesForRequisition.length === 0) {
+            summaryDiv.innerHTML = 'Nenhum lote selecionado';
+        } else {
+            summaryDiv.innerHTML = this.selectedLotesForRequisition.map(selected => {
+                const lote = this.currentProductForLoteSelection.lotes[selected.loteIndex];
+                const creationDate = selected.creationDate ? 
+                    new Date(selected.creationDate).toLocaleDateString('pt-BR') : 
+                    'Data não informada';
+                
+                return `
+                    <div class="selected-lote-item">
+                        <span class="lote-number">${selected.loteNumber}</span>
+                        <span class="lote-quantity">${this.formatNumber(selected.quantity)}</span>
+                        <span class="lote-creation">Criado: ${creationDate}</span>
+                        <span class="expiry-date">${new Date(lote.expiry).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // Confirmar seleção de lotes
+    confirmLoteSelection() {
+        console.log('confirmLoteSelection chamado');
+        
+        const totalSelected = this.selectedLotesForRequisition.reduce(
+            (sum, selected) => sum + selected.quantity, 0
+        );
+        
+        console.log('Total selecionado:', totalSelected);
+        console.log('Lotes selecionados:', this.selectedLotesForRequisition);
+        
+        if (totalSelected === 0) {
+            alert('Selecione pelo menos um lote e informe a quantidade.');
+            return;
+        }
+        
+        // Adicionar produto aos selecionados para requisição
+        const existingIndex = this.selectedProductsForRequisition.findIndex(
+            p => p.id === this.currentProductForLoteSelection.id
+        );
+        
+        const productData = {
+            id: this.currentProductForLoteSelection.id,
+            name: this.currentProductForLoteSelection.name,
+            code: this.currentProductForLoteSelection.code,
+            local: this.currentProductForLoteSelection.local,
+            availableQuantity: this.currentProductForLoteSelection.quantity,
+            requestedQuantity: totalSelected,
+            selectedLotes: [...this.selectedLotesForRequisition],
+            expiry: this.currentProductForLoteSelection.lotes?.[0]?.expiry
+        };
+        
+        if (existingIndex !== -1) {
+            this.selectedProductsForRequisition[existingIndex] = productData;
+        } else {
+            this.selectedProductsForRequisition.push(productData);
+        }
+        
+        this.closeLoteSelectionModal();
+        this.updateSelectedProductsDisplay();
+    }
+
+    // Fechar modal de seleção de lotes
+    closeLoteSelectionModal() {
+        const modal = document.getElementById('loteSelectionModal');
+        const modalOverlay = document.getElementById('modalOverlay');
+        
+        if (modal) modal.classList.remove('active');
+        if (modalOverlay) modalOverlay.classList.remove('active');
+        
+        this.currentProductForLoteSelection = null;
+        this.selectedLotesForRequisition = [];
+    }
+
+    // Método para editar lotes de um produto já selecionado
+    editProductLotes(productId) {
+        const product = this.products.find(p => p.id === productId);
+        if (product) {
+            this.openLoteSelectionModal(product);
+        }
+    }
+
+    // MÉTODO PARA FILTRAR REQUISIÇÕES POR PERÍODO
+    filterRequisitionsByPeriod(requisitions) {
+        const dateRange = this.getPeriodDateRange();
+        if (!dateRange) return requisitions;
+        
+        const { startDate, endDate } = dateRange;
+        
+        return requisitions.filter(requisition => {
+            const requisitionDate = new Date(requisition.createdAt);
+            return requisitionDate >= startDate && requisitionDate <= endDate;
+        });
     }
 }
 
-// Confirmar seleção de lotes
-confirmLoteSelection() {
-    console.log('confirmLoteSelection chamado');
-    
-    const totalSelected = this.selectedLotesForRequisition.reduce(
-        (sum, selected) => sum + selected.quantity, 0
-    );
-    
-    console.log('Total selecionado:', totalSelected);
-    console.log('Lotes selecionados:', this.selectedLotesForRequisition);
-    
-    if (totalSelected === 0) {
-        alert('Selecione pelo menos um lote e informe a quantidade.');
-        return;
-    }
-    
-    // Adicionar produto aos selecionados para requisição
-    const existingIndex = this.selectedProductsForRequisition.findIndex(
-        p => p.id === this.currentProductForLoteSelection.id
-    );
-    
-    const productData = {
-        id: this.currentProductForLoteSelection.id,
-        name: this.currentProductForLoteSelection.name,
-        code: this.currentProductForLoteSelection.code,
-        local: this.currentProductForLoteSelection.local,
-        availableQuantity: this.currentProductForLoteSelection.quantity,
-        requestedQuantity: totalSelected,
-        selectedLotes: [...this.selectedLotesForRequisition],
-        expiry: this.currentProductForLoteSelection.lotes?.[0]?.expiry
-    };
-    
-    if (existingIndex !== -1) {
-        this.selectedProductsForRequisition[existingIndex] = productData;
-    } else {
-        this.selectedProductsForRequisition.push(productData);
-    }
-    
-    this.closeLoteSelectionModal();
-    this.updateSelectedProductsDisplay();
-}
-
-// Fechar modal de seleção de lotes
-closeLoteSelectionModal() {
-    const modal = document.getElementById('loteSelectionModal');
-    const modalOverlay = document.getElementById('modalOverlay');
-    
-    if (modal) modal.classList.remove('active');
-    if (modalOverlay) modalOverlay.classList.remove('active');
-    
-    this.currentProductForLoteSelection = null;
-    this.selectedLotesForRequisition = [];
-}
-
-// Método para editar lotes de um produto já selecionado
-editProductLotes(productId) {
-    const product = this.products.find(p => p.id === productId);
-    if (product) {
-        this.openLoteSelectionModal(product);
-    }
-}  
-}
 // Inicializar o sistema quando a página carregar
 document.addEventListener('DOMContentLoaded', () => {
     // Dar tempo para o DOM carregar completamente
