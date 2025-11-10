@@ -84,6 +84,20 @@
                     <!-- Botão para adicionar novo item -->
                     <section class="actions-section">
                         <button type="button" id="addItemBtn" class="btn-primary">+ Adicionar Item</button>
+                        
+                        <!-- BOTÕES DE CORREÇÃO (apenas para admin) -->
+                        <button type="button" id="verificarIDsBtn" class="btn-warning" 
+                                onclick="window.inventorySystem.verificarSituacaoIDs()" 
+                                style="background: #ffc107; color: #000; display: none;">
+                            🔍 Verificar IDs
+                        </button>
+                        
+                        <button type="button" id="corrigirIDsBtn" class="btn-danger" 
+                                onclick="window.inventorySystem.corrigirIDsDuplicados()" 
+                                style="background: #dc3545; display: none;">
+                            🛠️ Corrigir IDs
+                        </button>
+                        
                         <div class="stats">
                             <span id="totalItems">Total de itens: 0</span>
                         </div>
