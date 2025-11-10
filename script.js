@@ -53,6 +53,231 @@ class InventorySystem {
         await this.setupAuthListener();
     }
 
+    // ===================== CORREÇÃO DE IDs DUPLICADOS =====================
+    
+    async corrigirIDsDuplicados() {
+        if (!confirm('⚠️ ATENÇÃO: Esta ação irá padronizar todos os IDs para usar apenas o ID do Firestore. Deseja continuar?')) {
+            return;
+        }
+
+        try {
+            const loadingModal = this.showLoadingModal('Corrigindo IDs duplicados...');
+            let produtosCorrigidos = 0;
+            let produtosComProblema = 0;
+
+            // Carregar todos os produtos do Firestore
+            const productsCol = collection(db, "products");
+            const productSnapshot = await getDocs(productsCol);
+            const produtosFirestore = productSnapshot.docs.map(doc => ({ 
+                firestoreId: doc.id, 
+                ...doc.data() 
+            }));
+
+            console.log("📦 Produtos no Firestore:", produtosFirestore);
+
+            // Identificar produtos com IDs duplicados
+            for (const produto of produtosFirestore) {
+                // Se o produto tem um ID customizado diferente do ID do Firestore
+                if (produto.id && produto.id !== produto.firestoreId) {
+                    console.log(`🔄 Corrigindo produto: ${produto.name}`);
+                    console.log(`   ID Antigo: ${produto.id}`);
+                    console.log(`   ID Novo: ${produto.firestoreId}`);
+                    
+                    try {
+                        // Criar novo produto com ID correto
+                        const produtoCorrigido = {
+                            ...produto,
+                            id: produto.firestoreId // Usar apenas o ID do Firestore
+                        };
+
+                        // Remover o campo firestoreId se existir
+                        delete produtoCorrigido.firestoreId;
+
+                        // Salvar com o ID correto
+                        await this.saveToFirestore(produtoCorrigido);
+                        
+                        // Deletar o documento antigo se for diferente
+                        if (produto.id !== produto.firestoreId) {
+                            try {
+                                await deleteDoc(doc(db, "products", produto.id));
+                                console.log(`🗑️ Documento antigo deletado: ${produto.id}`);
+                            } catch (deleteError) {
+                                console.log(`ℹ️ Documento antigo não encontrado ou já deletado: ${produto.id}`);
+                            }
+                        }
+                        
+                        produtosCorrigidos++;
+                        console.log(`✅ Produto corrigido: ${produto.name}`);
+                        
+                    } catch (error) {
+                        console.error(`❌ Erro ao corrigir ${produto.name}:`, error);
+                        produtosComProblema++;
+                    }
+                }
+            }
+
+            // Fechar loading
+            this.hideLoadingModal(loadingModal);
+
+            // Mostrar resultado
+            alert(`✅ Correção concluída!\n\n` +
+                  `• ${produtosCorrigidos} produtos corrigidos\n` +
+                  `• ${produtosComProblema} produtos com problemas\n` +
+                  `\n📝 Os produtos agora usam apenas o ID do Firestore.`);
+
+            // Recarregar dados
+            await this.loadFromFirestore();
+            
+        } catch (error) {
+            console.error('❌ Erro ao corrigir IDs:', error);
+            alert('❌ Erro ao corrigir IDs. Verifique o console para mais detalhes.');
+        }
+    }
+
+    // Método para verificar situação atual
+    analisarSituacaoIDs() {
+        const produtosComProblema = this.products.filter(product => {
+            // Verificar se há inconsistência nos IDs
+            return product.id && product.firestoreId && product.id !== product.firestoreId;
+        });
+
+        const relatorio = `
+📊 RELATÓRIO DE SITUAÇÃO DOS IDs
+
+• Total de produtos: ${this.products.length}
+• Produtos com IDs inconsistentes: ${produtosComProblema.length}
+
+${produtosComProblema.length > 0 ? 'PRODUTOS COM PROBLEMAS:' : '✅ Todos os IDs estão consistentes!'}
+${produtosComProblema.map(p => `• ${p.name}: ${p.id} → ${p.firestoreId}`).join('\n')}
+        `;
+
+        return relatorio;
+    }
+
+    // Método para verificar situação antes de corrigir
+    verificarSituacaoIDs() {
+        const relatorio = this.analisarSituacaoIDs();
+        
+        if (confirm(relatorio + '\n\nDeseja corrigir os IDs inconsistentes?')) {
+            this.corrigirIDsDuplicados();
+        }
+    }
+
+    // Método auxiliar para mostrar loading
+    showLoadingModal(message) {
+        const loadingModal = document.createElement('div');
+        loadingModal.className = 'loading-modal';
+        loadingModal.innerHTML = `
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <h4>${message || 'Processando...'}</h4>
+                <p>Por favor, aguarde.</p>
+            </div>
+        `;
+        
+        // Estilos para o modal de loading
+        loadingModal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        `;
+        
+        const loadingContent = loadingModal.querySelector('.loading-content');
+        loadingContent.style.cssText = `
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 300px;
+            color: #333;
+        `;
+        
+        const spinner = loadingModal.querySelector('.loading-spinner');
+        spinner.style.cssText = `
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 1rem;
+        `;
+        
+        // Adicionar keyframes para a animação se não existirem
+        if (!document.querySelector('#loading-spinner-styles')) {
+            const style = document.createElement('style');
+            style.id = 'loading-spinner-styles';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(loadingModal);
+        return loadingModal;
+    }
+
+    // Método para esconder o loading
+    hideLoadingModal(modal) {
+        if (modal && modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    }
+
+    // PREVENÇÃO: Modificar o método addProduct para usar apenas ID do Firestore
+    async addProduct(productData) {
+        try {
+            const totalQuantity = this.calculateTotalQuantity();
+            
+            // GERAR ID ÚNICO (usar timestamp + random para evitar duplicatas)
+            const uniqueId = `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            const product = {
+                id: uniqueId, // Usar ID único gerado
+                name: productData.name,
+                code: productData.code,
+                quantity: totalQuantity,
+                local: productData.local,
+                description: productData.description || '',
+                lotes: [...this.currentLotes],
+                lastUpdated: new Date().toLocaleDateString("pt-BR"),
+                createdAt: new Date().toISOString()
+            };
+
+            // Salvar no Firestore (o Firestore vai usar este ID como document ID)
+            const success = await this.saveToFirestore(product);
+            
+            if (success) {
+                this.products.push(product);
+                this.render();
+                this.updateStats();
+                this.updateDashboard();
+                this.populateLocationFilter();
+                
+                this.currentLotes = [];
+                this.renderLotes();
+                
+                return true;
+            }
+            return false;
+            
+        } catch (error) {
+            console.error('❌ Erro ao adicionar produto:', error);
+            alert('❌ Erro ao adicionar produto. Verifique o console.');
+            return false;
+        }
+    }
+
     // ===================== SISTEMA DE RELATÓRIOS =====================
     
     // Menu dropdown functionality
@@ -1069,6 +1294,13 @@ class InventorySystem {
             if (estimatedQuantityInput) estimatedQuantityInput.removeAttribute('required');
         }
 
+        // Mostrar botões de correção apenas para admin
+        const verificarIDsBtn = document.getElementById('verificarIDsBtn');
+        const corrigirIDsBtn = document.getElementById('corrigirIDsBtn');
+        
+        if (verificarIDsBtn) verificarIDsBtn.style.display = isAdmin ? 'inline-block' : 'none';
+        if (corrigirIDsBtn) corrigirIDsBtn.style.display = isAdmin ? 'inline-block' : 'none';
+
         this.render();
         this.renderRequisitions();
         this.renderUsers();
@@ -1107,10 +1339,10 @@ class InventorySystem {
     async saveToFirestore(product) {
         try {
             await setDoc(doc(db, "products", product.id), product);
-            console.log("Produto salvo no Firestore:", product.id);
+            console.log("✅ Produto salvo no Firestore com ID:", product.id);
             return true;
         } catch (error) {
-            console.error("Erro ao salvar no Firestore:", error);
+            console.error("❌ Erro ao salvar no Firestore:", error);
             return false;
         }
     }
